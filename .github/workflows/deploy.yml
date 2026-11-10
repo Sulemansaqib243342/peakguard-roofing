@@ -40,11 +40,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      # 6. Deploy to Whop (uses WHOP_API_KEY for non-interactive auth)
+      # 6. Deploy to Whop
       - name: Deploy to Whop
         env:
           WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
         run: |
+          npx @whop/cli login --method api-key --api-key "$WHOP_API_KEY"
           npx @whop/cli apps deploy \
             --app app_cwcaMIErHBTI4d \
             --skip_build \
