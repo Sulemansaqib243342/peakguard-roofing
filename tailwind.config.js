@@ -25,6 +25,7 @@ export default {
           "sans-serif",
         ],
         display: [
+          "Outfit",
           '"Plus Jakarta Sans"',
           "Inter",
           "-apple-system",
