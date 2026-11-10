@@ -2,32 +2,33 @@
  * PeakGuard Roofing — Final Balance Invoice CLI Test Script
  *
  * Usage:
- *   npx tsx scripts/test-invoice.ts [charge|send] [recipientEmail] [estimateTotal] [paymentMethodId]
+ *   npx tsx scripts/test-invoice.ts [auto_charge|send_manual] [recipientEmail] [estimateTotal] [paymentMethodId]
  *
  * Examples:
  *   # Option B: Send invoice to customer via email for manual payment
- *   npx tsx scripts/test-invoice.ts send homeowner@example.com 8500
+ *   npx tsx scripts/test-invoice.ts send_manual homeowner@example.com 8500
  *
  *   # Option A: Auto-charge customer's stored payment method (from deposit setup intent)
- *   npx tsx scripts/test-invoice.ts charge homeowner@example.com 8500 payt_xxxxxxxxxxxx
+ *   npx tsx scripts/test-invoice.ts auto_charge homeowner@example.com 8500 payt_xxxxxxxxxxxx
  */
 
-const ENDPOINT = process.env.INVOICE_ENDPOINT || "http://localhost:3000/api/invoices/final-balance";
+const ENDPOINT = process.env.INVOICE_ENDPOINT || "http://localhost:3000/api/invoice/final-balance";
 const ADMIN_SECRET = process.env.ADMIN_SECRET || "development-secret-change-me";
 
 async function main() {
   const args = process.argv.slice(2);
-  const action = (args[0] || "send") as "charge" | "send";
+  const rawMode = (args[0] || "send_manual").toLowerCase();
+  const mode = rawMode === "charge" || rawMode === "auto_charge" ? "auto_charge" : "send_manual";
   const recipientEmail = args[1] || "homeowner.test@peakguardroofing.com";
   const originalEstimateTotal = parseFloat(args[2] || "8500");
   const depositPaid = 500;
-  const paymentMethodId = args[3] || (action === "charge" ? "payt_mock_card_on_file_4242" : undefined);
+  const paymentMethodId = args[3] || (mode === "auto_charge" ? "payt_mock_card_on_file_4242" : undefined);
 
   console.log("=================================================");
   console.log("PeakGuard Roofing — Final Balance Invoice Dispatch");
   console.log("=================================================");
   console.log(`Endpoint:        ${ENDPOINT}`);
-  console.log(`Action:          ${action.toUpperCase()} (${action === "charge" ? "Option A: Auto-charge saved card" : "Option B: Send email link"})`);
+  console.log(`Mode:            ${mode} (${mode === "auto_charge" ? "Option A: Auto-charge saved card" : "Option B: Send email link"})`);
   console.log(`Recipient:       ${recipientEmail}`);
   console.log(`Original Total:  $${originalEstimateTotal}`);
   console.log(`Deposit Credit:  $${depositPaid}`);
@@ -50,7 +51,8 @@ async function main() {
         originalEstimateTotal,
         depositPaid,
         paymentMethodId,
-        action,
+        mode,
+        action: mode === "auto_charge" ? "charge" : "send",
         memo: `Final settlement for completed roofing project at ${recipientEmail}. Total $${originalEstimateTotal} less $${depositPaid} deposit paid.`,
       }),
     });

@@ -86,14 +86,22 @@ export const EstimateForm: React.FC = () => {
     setSubmitting(true);
 
     try {
-      // 1. Submit to server-side endpoint (/api/leads)
-      const response = await fetch("/api/leads", {
+      // 1. Submit to server-side endpoint (/api/estimate)
+      const response = await fetch("/api/estimate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...values,
+          name: values.name,
+          phone: values.phone,
+          email: values.email,
+          address: values.address,
+          zipCode: values.zipCode,
+          serviceType: values.serviceType,
+          message: values.notes,
+          notes: values.notes,
+          honeypot: values.honeypot,
           timestamp: mountedAt,
         }),
       });
@@ -136,25 +144,22 @@ export const EstimateForm: React.FC = () => {
   };
 
   return (
-    <section id="estimate" className="py-24 bg-slate-900 text-white relative overflow-hidden">
-      {/* Decorative gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-slate-900 to-slate-800 opacity-95" />
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-12 gap-12 items-start">
+    <section id="estimate" className="py-20 lg:py-24 bg-slate-900 text-white relative overflow-hidden border-b border-slate-800">
+      <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6">
+        <div className="grid lg:grid-cols-12 gap-10 items-start">
           
           {/* Left Column: Why Request an Estimate */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-400 text-xs font-bold uppercase tracking-wider">
+          <div className="lg:col-span-5 space-y-5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-amber-400 text-xs font-semibold uppercase tracking-wider">
               <span>Zero High-Pressure Sales</span>
             </div>
 
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
+            <h2 className="text-3xl sm:text-4xl font-display font-bold text-white tracking-tight leading-tight">
               Request Your Detailed Roofing Estimate
             </h2>
 
-            <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-              Fill out the form with your property details. A licensed roofing specialist will review your satellite footprint, inspect recent storm patterns in your area, and reach out within 24 hours with a comprehensive written estimate.
+            <p className="text-slate-300 text-sm sm:text-base leading-[1.65]">
+              Submit your property details for an itemized scope and estimate. A licensed roofing specialist will review your satellite footprint and reach out within 24 hours.
             </p>
 
             {/* Guarantees List */}
@@ -431,3 +436,4 @@ export const EstimateForm: React.FC = () => {
     </section>
   );
 };
+

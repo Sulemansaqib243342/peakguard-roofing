@@ -187,3 +187,4 @@ export async function retrieveWhopSetupIntent(
 
   return response.json();
 }
+

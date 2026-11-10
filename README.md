@@ -186,24 +186,27 @@ whop apps logs app_peakguard_roofing --level info
 
 ## 🔍 How to Verify Features
 
-### 1. Verify Leads
+### 1. Verify Leads & Estimates
 - Fill out the estimate form on `#estimate`.
-- Client and server validate fields and check honeypot.
-- Server logs lead creation to `whop apps logs`.
-- Diagnostic check: GET `/api/leads` returns recent submission IDs.
+- Submitted to `POST /api/estimate`.
+- Client and server validate fields with schema, enforce rate limits, and check honeypot.
+- Server logs lead creation to `whop apps logs` and calls Whop Leads API if key configured.
+- Diagnostic check: GET `/api/estimate` returns recent submission IDs and count.
 
 ### 2. Verify Tracking Events
-- In dev mode, open the floating **Whop Pixel Debugger** toolbar in the bottom-right.
-- View events as they trigger: `estimate_requested`, `service_viewed`, `deposit_started`.
+- Open the site with `?debug=1` in the URL (e.g. `http://localhost:3000/?debug=1`).
+- The floating **Whop Pixel Debugger** toolbar appears in the bottom-right corner with a static indicator dot.
+- Click to expand and view events as they trigger: `estimate_requested`, `service_viewed`, `deposit_started`.
 
 ### 3. Verify Final Balance Invoicing
 - Visit `/admin/invoicing`.
 - Enter your `ADMIN_SECRET`.
-- Test **Option A (Auto-charge)** by passing customer email, estimate total, deposit credit, and stored `payt_...` ID.
-- Test **Option B (Email send)** without a card on file to send a hosted invoice link.
+- Test **Option A (Auto-charge)** (`mode: "auto_charge"`) by passing customer email, estimate total, deposit credit, and stored `payt_...` ID.
+- Test **Option B (Email send)** (`mode: "send_manual"`) without a card on file to send a hosted invoice link.
 - Or run the CLI test script:
   ```bash
-  npx tsx scripts/test-invoice.ts send client@example.com 8500
+  npx tsx scripts/test-invoice.ts auto_charge client@example.com 8500 payt_test_token
+  npx tsx scripts/test-invoice.ts send_manual client@example.com 8500
   ```
 
 ---
@@ -214,3 +217,4 @@ whop apps logs app_peakguard_roofing --level info
 - **Protected Admin Routes**: The invoicing endpoint rejects any request lacking a valid `x-admin-secret` header.
 - **Honeypot + Timing Anti-Spam**: Prevents automated bot submissions on the lead generation form.
 - **PCI-DSS Level 1**: All credit card processing occurs through Whop Payments iframe elements; card data never touches your application.
+

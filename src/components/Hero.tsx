@@ -10,76 +10,66 @@ interface HeroProps {
 
 export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) => {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-slate-950 via-slate-900 to-slate-900 text-white pt-12 pb-20 lg:pt-20 lg:pb-32">
-      {/* Subtle grid pattern background */}
-      <div
-        className="absolute inset-0 opacity-10 pointer-events-none"
-        style={{
-          backgroundImage: "radial-gradient(#f59e0b 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
-        }}
-      />
-
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid lg:grid-cols-12 gap-12 items-center">
+    <section className="relative overflow-hidden bg-slate-950 text-white pt-12 pb-16 lg:pt-16 lg:pb-24 border-b border-slate-900">
+      <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6">
+        <div className="grid lg:grid-cols-12 gap-10 items-center">
           
           {/* Left Column: Value Proposition & CTAs */}
-          <div className="lg:col-span-7 space-y-8">
+          <div className="lg:col-span-7 space-y-6">
             
-            {/* Top pill badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-amber-400 text-xs font-semibold backdrop-blur-sm">
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-              </span>
-              <span>DFW Storm Damage Assessment Teams Dispatched Daily</span>
+            {/* Top info pill badge (Static dot, no animation) */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-amber-400 text-xs font-medium">
+              <span className="h-2 w-2 rounded-full bg-amber-400 shrink-0"></span>
+              <span>Texas Storm Damage & Diagnostic Assessments</span>
             </div>
 
-            {/* Main Headline */}
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.08] text-white">
+            {/* Main Headline per strict prompt spec:
+                size ~clamp(2.25rem, 4.5vw, 3.5rem), weight 700, line-height 1.15,
+                negative letter spacing, max 2-3 lines, only "50 Years." accent in gold */}
+            <h1 className="text-[clamp(2.25rem,4.5vw,3.5rem)] font-bold font-display tracking-tight leading-[1.15] text-white max-w-2xl">
               Roofing Built to Protect Your Home for the Next{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-200">
-                50 Years.
-              </span>
+              <span className="text-amber-400">50 Years.</span>
             </h1>
 
-            {/* Sub-headline */}
-            <p className="text-lg sm:text-xl text-slate-300 max-w-2xl leading-relaxed">
+            {/* Sub-headline: 16-18px, line-height 1.6-1.7, muted color with good contrast */}
+            <p className="text-base sm:text-lg text-slate-300 max-w-xl leading-[1.65]">
               Precision tear-offs, storm leak repairs, and 21-point forensic drone inspections.
-              Clear flat-rate pricing, certified GAF craftsmanship, and instant secure payment via Whop.
+              Transparent flat rates, certified craftsmanship, and instant payments via Whop.
             </p>
 
             {/* Bullet Highlights */}
-            <div className="grid sm:grid-cols-2 gap-3 pt-2 text-sm text-slate-300">
+            <div className="grid sm:grid-cols-2 gap-3 pt-1 text-sm text-slate-300">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
-                <span>$2,000,000 Liability Insured</span>
+                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Fully Licensed & Insured (Sample)</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
-                <span>50-Year Non-Prorated Warranty</span>
+                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Non-Prorated Warranty Options</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
-                <span>Magnetic Ground Nail Sweep</span>
+                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>Magnetic Yard Nail Sweep</span>
               </div>
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>Financing Available at Checkout</span>
               </div>
             </div>
 
             {/* Primary Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 pt-3">
               <button
+                type="button"
                 onClick={onOpenEstimate}
-                className="px-8 py-4 rounded-xl text-base font-bold text-slate-950 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-2 text-center"
+                className="px-6 py-3.5 rounded-xl text-sm font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 transition-all shadow-sm flex items-center justify-center gap-2 text-center focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
               >
                 <span>Request Free Estimate</span>
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-4 h-4" />
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   trackServiceViewed({
                     id: "roof-inspection",
@@ -88,14 +78,14 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
                   });
                   onOpenCheckout("inspection");
                 }}
-                className="px-6 py-4 rounded-xl text-base font-bold text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 transition-all flex items-center justify-center gap-2 text-center"
+                className="px-5 py-3.5 rounded-xl text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 transition-all flex items-center justify-center gap-2 text-center focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
               >
-                <span>Book $149 Drone Inspection</span>
+                <span>Book $149 Inspection</span>
               </button>
             </div>
 
             {/* Trust markers under CTAs */}
-            <div className="pt-4 border-t border-slate-800/80 flex flex-wrap items-center gap-6 text-xs text-slate-400">
+            <div className="pt-4 border-t border-slate-800/80 flex flex-wrap items-center gap-5 text-xs text-slate-400">
               <div className="flex items-center gap-1.5">
                 <div className="flex text-amber-400">
                   {[...Array(5)].map((_, i) => (
@@ -103,45 +93,43 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
                   ))}
                 </div>
                 <span className="font-semibold text-slate-200">4.9 / 5.0</span>
-                <span>(450+ verified reviews)</span>
+                <span className="text-slate-400">(Sample Reviews)</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <Award className="w-4 h-4 text-amber-400" />
-                <span>GAF Master Elite Certified</span>
+                <Award className="w-3.5 h-3.5 text-amber-400" />
+                <span>Certified Installer Standard</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-emerald-400" />
-                <span>2-Hour Emergency Tarping</span>
+                <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Emergency Tarp Response</span>
               </div>
             </div>
           </div>
 
           {/* Right Column: Hero Visual Card with Direct Booking Preview */}
           <div className="lg:col-span-5">
-            <div className="relative rounded-2xl bg-gradient-to-b from-slate-800/90 to-slate-900/90 border border-slate-700 p-6 sm:p-8 shadow-2xl backdrop-blur-sm space-y-6">
+            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6 sm:p-7 shadow-xl space-y-5">
               
-              {/* Card Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-700">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
-                    <ShieldCheck className="w-5 h-5" />
+              {/* Card Header (Deleted the fake "Verified Active" badge per Requirement D) */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
+                    <ShieldCheck className="w-4 h-4" />
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-white">Instant Online Booking</h2>
-                    <p className="text-xs text-slate-400">Directly through Whop Payments</p>
+                    <h2 className="text-sm font-bold text-white">Instant Online Booking</h2>
+                    <p className="text-xs text-slate-400">Whop Payments: Cards, Apple Pay, Google Pay</p>
                   </div>
                 </div>
-                <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-2.5 py-0.5 rounded-full">
-                  Verified Active
-                </span>
               </div>
 
-              {/* 3 Quick-Book Plans Showcase */}
+              {/* 3 Quick-Book Plans Showcase (Each whole card is a button with hover state) */}
               <div className="space-y-3">
                 {/* Plan 1 */}
-                <div
+                <button
+                  type="button"
                   onClick={() => onOpenCheckout("inspection")}
-                  className="p-4 rounded-xl bg-slate-900/60 border border-slate-700/60 hover:border-amber-500/50 hover:bg-slate-800/60 transition-all cursor-pointer group flex items-center justify-between"
+                  className="w-full text-left p-4 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-amber-500/60 hover:bg-slate-950 transition-all cursor-pointer group flex items-center justify-between focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -154,38 +142,44 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
                     </div>
                     <p className="text-xs text-slate-400">21-point drone scan + credited toward repairs</p>
                   </div>
-                  <div className="text-right pl-3">
-                    <div className="text-lg font-black text-amber-400">$149</div>
-                    <span className="text-[10px] text-slate-400 group-hover:underline">Book &rarr;</span>
+                  <div className="text-right pl-3 shrink-0">
+                    <div className="text-base font-bold text-amber-400">$149</div>
+                    <span className="text-sm font-medium text-slate-300 group-hover:text-amber-300 group-hover:underline">
+                      Book &rarr;
+                    </span>
                   </div>
-                </div>
+                </button>
 
                 {/* Plan 2 */}
-                <div
+                <button
+                  type="button"
                   onClick={() => onOpenCheckout("deposit")}
-                  className="p-4 rounded-xl bg-slate-900/60 border border-slate-700/60 hover:border-amber-500/50 hover:bg-slate-800/60 transition-all cursor-pointer group flex items-center justify-between"
+                  className="w-full text-left p-4 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-amber-500/60 hover:bg-slate-950 transition-all cursor-pointer group flex items-center justify-between focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-white group-hover:text-amber-400 transition-colors">
                         Project Deposit
                       </span>
-                      <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono">
                         CARD SAVED
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Locks install date; card saved for final invoice</p>
+                    <p className="text-xs text-slate-400">Locks date; card saved for final invoice</p>
                   </div>
-                  <div className="text-right pl-3">
-                    <div className="text-lg font-black text-amber-400">$500</div>
-                    <span className="text-[10px] text-slate-400 group-hover:underline">Reserve &rarr;</span>
+                  <div className="text-right pl-3 shrink-0">
+                    <div className="text-base font-bold text-amber-400">$500</div>
+                    <span className="text-sm font-medium text-slate-300 group-hover:text-amber-300 group-hover:underline">
+                      Reserve &rarr;
+                    </span>
                   </div>
-                </div>
+                </button>
 
                 {/* Plan 3 */}
-                <div
+                <button
+                  type="button"
                   onClick={() => onOpenCheckout("tuneUp")}
-                  className="p-4 rounded-xl bg-slate-900/60 border border-slate-700/60 hover:border-amber-500/50 hover:bg-slate-800/60 transition-all cursor-pointer group flex items-center justify-between"
+                  className="w-full text-left p-4 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-amber-500/60 hover:bg-slate-950 transition-all cursor-pointer group flex items-center justify-between focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -195,34 +189,24 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
                     </div>
                     <p className="text-xs text-slate-400">Reseal boots & flashing + up to 5 shingles</p>
                   </div>
-                  <div className="text-right pl-3">
-                    <div className="text-lg font-black text-amber-400">$299</div>
-                    <span className="text-[10px] text-slate-400 group-hover:underline">Book &rarr;</span>
+                  <div className="text-right pl-3 shrink-0">
+                    <div className="text-base font-bold text-amber-400">$299</div>
+                    <span className="text-sm font-medium text-slate-300 group-hover:text-amber-300 group-hover:underline">
+                      Book &rarr;
+                    </span>
                   </div>
-                </div>
+                </button>
               </div>
 
               {/* Bottom security assurance */}
-              <div className="pt-2 text-[11px] text-slate-400 flex items-center justify-between">
-                <span>Whop Payments: Apple Pay, Google Pay, Cards</span>
-                <span className="text-slate-500">256-bit SSL Encrypted</span>
+              <div className="pt-2 text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80">
+                <span>Whop Payments • PCI-DSS Level 1</span>
+                <span className="text-slate-400">Instant Receipt</span>
               </div>
             </div>
           </div>
 
         </div>
-
-        {/* Stats Strip at Bottom of Hero */}
-        <div className="mt-16 pt-10 border-t border-slate-800 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-          {siteConfig.trustStats.map((stat, idx) => (
-            <div key={idx} className="space-y-1">
-              <div className="text-3xl sm:text-4xl font-black text-white">{stat.value}</div>
-              <div className="text-sm font-semibold text-amber-400">{stat.label}</div>
-              <div className="text-xs text-slate-400">{stat.detail}</div>
-            </div>
-          ))}
-        </div>
-
       </div>
     </section>
   );

@@ -2,15 +2,18 @@ import { useState } from "react";
 import { siteConfig } from "./site.config";
 import { Navbar } from "./components/Navbar";
 import { Hero } from "./components/Hero";
+import { TrustBar } from "./components/TrustBar";
 import { ServicesSection } from "./components/ServicesSection";
+import { HowItWorksSection } from "./components/HowItWorksSection";
 import { PricingPlansSection } from "./components/PricingPlansSection";
 import { FinancingCallout } from "./components/FinancingCallout";
 import { ServiceAreaSection } from "./components/ServiceAreaSection";
 import { ReviewsSection } from "./components/ReviewsSection";
-import { EstimateForm } from "./components/EstimateForm";
 import { FAQSection } from "./components/FAQSection";
+import { EstimateForm } from "./components/EstimateForm";
 import { ContactSection } from "./components/ContactSection";
 import { Footer } from "./components/Footer";
+import { StickyMobileBar } from "./components/StickyMobileBar";
 import { WhopCheckoutModal } from "./components/WhopCheckoutModal";
 import { DevTrackingToolbar } from "./components/DevTrackingToolbar";
 
@@ -40,43 +43,68 @@ export default function App() {
         onOpenCheckout={handleOpenCheckout}
       />
 
+      {/* Real sections in the exact required order:
+          1. Hero
+          2. Trust bar
+          3. Services (Repair / Replacement / Inspection)
+          4. How it works (3 steps: Inspect -> Deposit -> Final invoice)
+          5. Pricing cards
+          6. Financing callout
+          7. Service Area
+          8. Reviews
+          9. FAQ
+          10. Request Estimate form
+          11. Contact
+          12. Footer */}
       <main className="flex-1">
-        {/* 1. Hero with CTAs & Live stats */}
+        {/* 1. Hero */}
         <Hero
           onOpenEstimate={handleOpenEstimate}
           onOpenCheckout={handleOpenCheckout}
         />
 
-        {/* 2. Services Grid (Repair, Replacement, Inspection, Tune-Up) */}
+        {/* 2. Trust Bar */}
+        <TrustBar />
+
+        {/* 3. Services Grid (Repair, Replacement, Inspection, Tune-Up) */}
         <ServicesSection
           onOpenEstimate={handleOpenEstimate}
           onOpenCheckout={handleOpenCheckout}
         />
 
-        {/* 3. Direct Whop Checkout Plans (Inspection $149, Deposit $500, Tune-Up $299) */}
+        {/* 4. How It Works (3 Steps: Inspect -> Deposit -> Final invoice) */}
+        <HowItWorksSection
+          onOpenCheckout={handleOpenCheckout}
+          onOpenEstimate={handleOpenEstimate}
+        />
+
+        {/* 5. Pricing Cards (Inspection $149, Deposit $500, Tune-Up $299) */}
         <PricingPlansSection onOpenCheckout={handleOpenCheckout} />
 
-        {/* 4. Financing Callout (Transparent Whop Payments policy) */}
+        {/* 6. Financing Callout */}
         <FinancingCallout onOpenEstimate={handleOpenEstimate} />
 
-        {/* 5. Service Area & Interactive ZIP code availability checker */}
+        {/* 7. Service Area & Interactive ZIP code availability checker */}
         <ServiceAreaSection />
 
-        {/* 6. Reviews & Trust Credentials (Clearly marked template placeholder content) */}
+        {/* 8. Reviews & Trust Credentials (Clearly marked template placeholder content) */}
         <ReviewsSection />
 
-        {/* 7. Estimate Form (Server-side validation, spam prevention, Whop Leads) */}
-        <EstimateForm />
-
-        {/* 8. FAQ Accordion */}
+        {/* 9. FAQ Accordion */}
         <FAQSection />
 
-        {/* 9. Direct Contact Details & 24/7 Dispatch */}
+        {/* 10. Request Estimate Form (Server-side validation, rate limiting, spam prevention, Whop Leads) */}
+        <EstimateForm />
+
+        {/* 11. Contact & 24/7 Dispatch Details */}
         <ContactSection />
       </main>
 
-      {/* Footer */}
+      {/* 12. Footer */}
       <Footer />
+
+      {/* Sticky Mobile Bottom Bar ("Call" & "Book Inspection") */}
+      <StickyMobileBar onOpenCheckout={handleOpenCheckout} />
 
       {/* Whop Checkout Modal with Elements & Card-on-file Setup Intent */}
       {checkoutPlan && (
@@ -87,7 +115,7 @@ export default function App() {
         />
       )}
 
-      {/* Dev-only event tracking toolbar for recording & inspection */}
+      {/* Dev-only event tracking toolbar for recording & inspection (renders only with ?debug=1) */}
       <DevTrackingToolbar />
     </div>
   );

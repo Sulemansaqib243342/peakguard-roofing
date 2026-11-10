@@ -42,43 +42,44 @@ export const ServiceAreaSection: React.FC = () => {
   };
 
   return (
-    <section id="service-area" className="py-20 bg-slate-50 border-b border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section id="service-area" className="py-20 lg:py-24 bg-slate-50 border-b border-slate-200">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6">
         
         {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-200 text-slate-800 text-xs font-bold tracking-wide uppercase">
+        <div className="text-center max-w-2xl mx-auto mb-16 space-y-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-200 text-slate-800 text-xs font-semibold uppercase tracking-wider">
             <MapPin className="w-3.5 h-3.5 text-amber-600" />
-            <span>Service Coverage</span>
+            <span>Regional Coverage</span>
           </div>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
-            Proudly Serving the Dallas-Fort Worth Metroplex
+          <h2 className="text-3xl sm:text-4xl font-display font-bold text-slate-900 tracking-tight">
+            Dallas-Fort Worth Metroplex Coverage
           </h2>
-          <p className="text-base sm:text-lg text-slate-600">
-            Dedicated roofing crews positioned across Dallas, Collin, Tarrant, and Denton counties for rapid emergency dispatch.
+          <p className="text-base sm:text-lg text-slate-600 leading-[1.65]">
+            Roofing crews positioned across Dallas, Collin, Tarrant, and Denton counties for rapid emergency dispatch and scheduled installations.
           </p>
         </div>
 
         {/* Interactive ZIP Code Checker Bar */}
-        <div className="max-w-2xl mx-auto mb-16">
+        <div className="max-w-xl mx-auto mb-16">
           <form
             onSubmit={handleZipCheck}
-            className="p-2 sm:p-3 bg-white rounded-2xl border border-slate-300 shadow-lg flex flex-col sm:flex-row gap-2"
+            className="p-2 bg-white rounded-2xl border border-slate-300 shadow-sm flex flex-col sm:flex-row gap-2"
           >
             <div className="relative flex-1">
-              <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Enter your 5-digit ZIP code (e.g. 75201, 75024)"
+                placeholder="Enter 5-digit ZIP code (e.g. 75201)"
                 value={zipQuery}
                 onChange={(e) => setZipQuery(e.target.value)}
                 maxLength={5}
-                className="w-full pl-11 pr-4 py-3 rounded-xl text-sm border-0 focus:ring-2 focus:ring-amber-500 text-slate-900 placeholder:text-slate-400 font-medium"
+                aria-label="ZIP Code Availability Search"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm border-0 focus:ring-2 focus:ring-amber-500 text-slate-900 placeholder:text-slate-400 font-medium"
               />
             </div>
             <button
               type="submit"
-              className="px-6 py-3 rounded-xl text-sm font-bold text-slate-950 bg-amber-400 hover:bg-amber-500 transition-colors shadow-sm"
+              className="px-5 py-2.5 rounded-xl text-xs font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 transition-colors shadow-sm focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-none"
             >
               Check Availability
             </button>
@@ -95,7 +96,7 @@ export const ServiceAreaSection: React.FC = () => {
             >
               {searchResult.found ? (
                 <>
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   <div>
                     <span className="font-bold">Great news! ZIP code {zipQuery} is in our primary coverage zone.</span>
                     <p className="mt-1 text-xs text-emerald-800">
@@ -106,15 +107,15 @@ export const ServiceAreaSection: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
                     <span className="font-bold">ZIP code {zipQuery} is outside our automated primary radius.</span>
                     <p className="mt-1 text-xs text-amber-800">
-                      We still frequently take projects across adjacent Texas counties. Please submit the estimate form or call{" "}
+                      We frequently accommodate projects across adjacent North Texas counties. Submit an estimate request or call{" "}
                       <a href={`tel:${siteConfig.company.phone}`} className="underline font-bold">
                         {siteConfig.company.phoneDisplay}
                       </a>{" "}
-                      to confirm crew dispatch to your location.
+                      to confirm dispatch.
                     </p>
                   </div>
                 </>
@@ -128,10 +129,10 @@ export const ServiceAreaSection: React.FC = () => {
           {siteConfig.serviceAreas.map((area, idx) => (
             <div
               key={idx}
-              className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition-shadow space-y-4"
+              className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow transition-shadow space-y-4"
             >
               <div className="flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-amber-500" />
+                <MapPin className="w-4 h-4 text-amber-500" />
                 <h3 className="font-bold text-base text-slate-900">{area.name}</h3>
               </div>
 

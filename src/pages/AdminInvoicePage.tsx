@@ -46,7 +46,7 @@ export default function AdminInvoicePage() {
     setResult(null);
 
     try {
-      const response = await fetch("/api/invoices/final-balance", {
+      const response = await fetch("/api/invoice/final-balance", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -58,6 +58,7 @@ export default function AdminInvoicePage() {
           originalEstimateTotal: originalEstimate,
           depositPaid,
           paymentMethodId: paymentMethodId.trim() || undefined,
+          mode: action === "charge" ? "auto_charge" : "send_manual",
           action,
           memo: memo || undefined,
         }),
@@ -413,7 +414,8 @@ export default function AdminInvoicePage() {
                     This secure endpoint is called post-job by your dispatch software, CRM, or billing administrator.
                   </p>
                   <div className="space-y-2 pt-2 border-t border-slate-900">
-                    <div><strong>POST</strong> <code className="text-amber-400">/api/invoices/final-balance</code></div>
+                    <div><strong>POST</strong> <code className="text-amber-400">/api/invoice/final-balance</code></div>
+                    <div><strong>Modes:</strong> <code className="text-slate-300 font-mono">auto_charge</code> (saved card) or <code className="text-slate-300 font-mono">send_manual</code> (email link)</div>
                     <div><strong>Auth:</strong> Header <code className="text-amber-400">x-admin-secret</code></div>
                     <div><strong>API Path:</strong> Injected automatically by Whop hosting runtime to <code className="text-amber-400">WHOP_API_ORIGIN</code></div>
                   </div>

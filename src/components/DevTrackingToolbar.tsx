@@ -11,6 +11,15 @@ interface LoggedEvent {
 export const DevTrackingToolbar: React.FC = () => {
   const [events, setEvents] = useState<LoggedEvent[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Only display debugger when URL contains ?debug=1
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsVisible(params.get("debug") === "1");
+    }
+  }, []);
 
   useEffect(() => {
     // Intercept console.groupCollapsed calls from tracking logger
@@ -43,6 +52,8 @@ export const DevTrackingToolbar: React.FC = () => {
     }
   }, []);
 
+  if (!isVisible) return null;
+
   return (
     <aside aria-label="Whop tracking debug" className="fixed bottom-4 right-4 z-50 font-sans text-xs">
       <div className="bg-slate-950 text-white rounded-2xl shadow-2xl border border-slate-700 overflow-hidden w-80 sm:w-96 transition-all">
@@ -53,10 +64,7 @@ export const DevTrackingToolbar: React.FC = () => {
           className="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/80 transition-colors"
         >
           <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-            </span>
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shrink-0 inline-block"></span>
             <span className="font-bold text-white flex items-center gap-1.5">
               <Activity className="w-4 h-4 text-amber-400" />
               <span>Whop Pixel Debugger</span>

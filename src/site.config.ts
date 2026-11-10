@@ -133,11 +133,11 @@ export const siteConfig: SiteConfig = {
       zip: "75201",
       formatted: "1420 Commercial Pkwy, Ste 200, Dallas, TX 75201",
     },
-    license: "TX-RCL #849201-A",
-    insurance: "$2,000,000 Commercial General Liability + Full Workman's Comp",
+    license: "TX-RCL #849201-A (Sample License)",
+    insurance: "$2,000,000 Commercial General Liability (Sample Coverage Placeholder)",
     yearsInBusiness: 18,
     hours: "Monday – Saturday: 7:00 AM – 7:00 PM CST",
-    emergencyHours: "24/7 Emergency Storm Response Dispatch",
+    emergencyHours: "24/7 Emergency Storm Dispatch (Sample Availability)",
   },
 
   brand: {
@@ -372,9 +372,10 @@ export const siteConfig: SiteConfig = {
   ],
 
   trustStats: [
-    { value: "18+", label: "Years Serving DFW", detail: "Family-owned & operated since 2008" },
-    { value: "4,200+", label: "Roofs Completed", detail: "Zero BBB complaints on record" },
-    { value: "50-Yr", label: "Warranty Available", detail: "GAF Master Elite certified installer" },
-    { value: "4.9 ★", label: "Average Review Rating", detail: "Across 450+ verified customer reviews" },
+    { value: "15+ Yrs", label: "Sample Experience", detail: "Sample contractor history placeholder" },
+    { value: "3,500+", label: "Sample Projects Completed", detail: "Sample project metric placeholder" },
+    { value: "50-Year", label: "Sample Warranty Scope", detail: "Sample manufacturer warranty terms" },
+    { value: "4.9 ★", label: "Sample Rating", detail: "Template demonstration review score" },
   ],
 };
+

@@ -50,7 +50,12 @@ export interface TrackingParams {
  * Helpful for demonstrating event tracking in recordings.
  */
 function logDebugEvent(name: string, params?: TrackingParams) {
-  if (import.meta.env.DEV || typeof window !== "undefined" && window.location.search.includes("debug=track")) {
+  if (
+    import.meta.env.DEV ||
+    (typeof window !== "undefined" &&
+      (window.location.search.includes("debug=1") ||
+        window.location.search.includes("debug=track")))
+  ) {
     console.groupCollapsed(
       `%c[Whop Track] %c${name}%c @ ${new Date().toISOString()}`,
       "color: #f59e0b; font-weight: bold;",
@@ -60,6 +65,23 @@ function logDebugEvent(name: string, params?: TrackingParams) {
     console.table(params || {});
     console.trace("Triggered from:");
     console.groupEnd();
+  }
+
+  // Dispatch custom event for in-browser DevTrackingToolbar
+  if (typeof window !== "undefined") {
+    try {
+      const customEvt = new CustomEvent("whop-debug-event", {
+        detail: {
+          id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          name,
+          params,
+          time: new Date().toLocaleTimeString(),
+        },
+      });
+      window.dispatchEvent(customEvt);
+    } catch {
+      // Ignore in non-browser or older environments
+    }
   }
 }
 
@@ -177,3 +199,4 @@ export function trackTuneUpStarted(planId: string, amount: number = 299) {
     event_id: `tune_${Date.now()}`,
   });
 }
+
