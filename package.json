@@ -8,7 +8,8 @@
     "build": "vite build && vite build --mode worker",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "deploy": "whop apps deploy"
+    "deploy": "npm run build && npx @whop/cli apps deploy --app app_cwcaMIErHBTI4d --skip_build --skip_typecheck",
+    "ship": "git add -A && git commit -m \"chore: update\" && git push origin main"
   },
   "dependencies": {
     "@whop/elements": "latest",
