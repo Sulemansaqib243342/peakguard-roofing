@@ -1,3 +1,4 @@
+import { whop } from '@whop/cli/vite'
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
@@ -6,19 +7,20 @@ import path from "node:path";
 // so that estimate submission, invoice creation, and diagnostics work seamlessly
 // before deploying to Whop hosting.
 export default defineConfig(({ mode }) => {
-  // If building the Cloudflare Worker runtime bundle for Whop hosting:
+  // If building the server runtime bundle for Whop hosting:
+  // Whop hosting requires server code in dist/server/index.js and static assets in dist/client/
   if (mode === "worker") {
     return {
+      plugins: [whop({ disableTanstackDevtools: true })],
       build: {
         lib: {
           entry: path.resolve(__dirname, "src/server/worker.ts"),
           formats: ["es"],
-          fileName: () => "worker.js",
+          fileName: () => "index.js",
         },
-        outDir: "dist",
+        outDir: "dist/server",
         emptyOutDir: false,
         rollupOptions: {
-          // Cloudflare worker runtime environment
           external: [],
         },
       },
@@ -28,6 +30,7 @@ export default defineConfig(({ mode }) => {
   // Client-side build (SPA)
   return {
     plugins: [
+      whop({ disableTanstackDevtools: true }),
       react(),
       // Dev middleware to handle /api routes locally during development
       {
@@ -106,8 +109,8 @@ export default defineConfig(({ mode }) => {
       port: 3000,
     },
     build: {
-      outDir: "dist",
-      emptyOutDir: true,
+      outDir: "dist/client",
+      emptyOutDir: false,
       sourcemap: true,
     },
   };

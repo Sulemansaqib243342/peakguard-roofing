@@ -31,3 +31,6 @@ npm-debug.log*
 # TypeScript
 *.tsbuildinfo
 
+# Local downloaded reference docs
+whop_docs/
+

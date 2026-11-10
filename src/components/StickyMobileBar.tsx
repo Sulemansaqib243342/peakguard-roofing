@@ -33,3 +33,4 @@ export const StickyMobileBar: React.FC<StickyMobileBarProps> = ({ onOpenCheckout
     </div>
   );
 };
+

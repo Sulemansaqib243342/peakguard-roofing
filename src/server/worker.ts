@@ -4,18 +4,23 @@
 //
 // Runs in the Whop hosting runtime (Cloudflare Workers based).
 // Handles:
-//   1. POST /api/estimate - Schema validation, rate limiting, honeypot spam trap,
-//      and Whop Leads API creation (POST /api/v1/leads)
+//   1. POST /api/estimate & POST /api/leads - Schema validation, rate limiting,
+//      honeypot spam trap, and Whop Leads API creation (POST /api/v1/leads)
 //   2. POST /api/invoice/final-balance - Authenticated admin endpoint with mode:
 //      "auto_charge" (Option A: stored payment method) or "send_manual" (Option B)
-//   3. POST /api/webhooks/whop - Verify and handle payment.succeeded & setup_intent.succeeded
-//   4. Fallback to ASSETS for client-side static bundle
+//   3. GET /api/setup-intents - Retrieve setup intent to confirm stored card
+//   4. POST /api/webhooks/whop - Verify and handle payment.succeeded & setup_intent.succeeded
+//   5. Fallback to ASSETS for client-side static bundle
 //
 // SECURITY:
 // - WHOP_API_KEY is NEVER exposed to the browser.
-// - All outbound Whop API calls use the hosting runtime's injected credentials.
-// - /api/invoice/final-balance requires an `x-admin-secret` header.
+// - Server-side requests are signed by runtime or use server-only WHOP_API_KEY.
+// - /api/invoice/final-balance requires constant-time authenticated `x-admin-secret`.
+// - Webhooks require HMAC-SHA256 signature verification with 5-min timestamp window.
+// - CORS restricted to same origin.
 // ============================================================================
+
+import { siteConfig } from "../site.config";
 
 export interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
@@ -46,7 +51,7 @@ interface InvoiceRequestBody {
   recipientEmail: string;
   customerName?: string;
   originalEstimateTotal: number;
-  depositPaid: number;          // Typically $500
+  depositPaid?: number;         // Defaults to siteConfig.defaultDepositAmount ($500)
   paymentMethodId?: string;     // From deposit setup intent
   memberId?: string;
   memo?: string;
@@ -77,47 +82,59 @@ function checkRateLimit(ip: string, limit = 5, windowMs = 60000): boolean {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// In-memory lead store for the worker lifecycle (logs + inspection)
+// Security & CORS helpers
 // ────────────────────────────────────────────────────────────────────────────
-interface StoredLead {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  address: string;
-  zipCode: string;
-  serviceType: string;
-  message: string;
-  createdAt: string;
-  ip: string;
-  whopLeadId?: string;
+
+/**
+ * Constant-time string comparison to prevent timing attacks on secrets
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
 }
 
-const memoryLeads: StoredLead[] = [];
+/**
+ * Same-origin CORS enforcement
+ */
+function getCorsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get("origin");
+  const requestUrl = new URL(request.url);
+  const isSameOrigin = !origin || origin === requestUrl.origin;
+  const allowedOrigin = isSameOrigin ? (origin || requestUrl.origin) : requestUrl.origin;
 
-// ────────────────────────────────────────────────────────────────────────────
-// Utility helpers
-// ────────────────────────────────────────────────────────────────────────────
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-admin-secret",
+    "Vary": "Origin",
+  };
+}
 
-function jsonResponse(data: unknown, status = 200): Response {
+function jsonResponse(data: unknown, status = 200, request?: Request): Response {
+  const corsHeaders = request ? getCorsHeaders(request) : {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-admin-secret",
+  };
+
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-admin-secret",
+      ...corsHeaders,
     },
   });
 }
 
-function corsPreflight(): Response {
+function corsPreflight(request: Request): Response {
   return new Response(null, {
     status: 204,
     headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-admin-secret",
+      ...getCorsHeaders(request),
       "Access-Control-Max-Age": "86400",
     },
   });
@@ -131,6 +148,7 @@ function corsPreflight(): Response {
  * Handle Estimate / Lead form submission (POST /api/estimate & POST /api/leads)
  * Validates inputs, enforces rate limiting, rejects spam (honeypot + speed check),
  * and creates lead via Whop Leads API (POST /api/v1/leads).
+ * Requires Whop permission: lead:manage
  */
 async function handleLeadSubmission(request: Request, env: Env): Promise<Response> {
   const clientIp = request.headers.get("cf-connecting-ip") || "127.0.0.1";
@@ -139,7 +157,8 @@ async function handleLeadSubmission(request: Request, env: Env): Promise<Respons
   if (!checkRateLimit(clientIp, 5, 60000)) {
     return jsonResponse(
       { error: "Too many requests. Please wait a minute before submitting again." },
-      429
+      429,
+      request
     );
   }
 
@@ -147,18 +166,18 @@ async function handleLeadSubmission(request: Request, env: Env): Promise<Respons
   try {
     body = await request.json();
   } catch {
-    return jsonResponse({ error: "Invalid JSON request body" }, 400);
+    return jsonResponse({ error: "Invalid JSON request body" }, 400, request);
   }
 
   // 2. Spam protection: Honeypot check
   if (body.honeypot && body.honeypot.trim().length > 0) {
     // Bot filled the hidden field. Silently accept to waste bot time, but do not record.
-    return jsonResponse({ success: true, message: "Thank you for your request." }, 200);
+    return jsonResponse({ success: true, message: "Thank you for your request." }, 200, request);
   }
 
   // 3. Spam protection: Timing check (bots submit in < 1.5 seconds)
   if (body.timestamp && Date.now() - body.timestamp < 1500) {
-    return jsonResponse({ error: "Submission too fast. Please retry." }, 400);
+    return jsonResponse({ error: "Submission too fast. Please retry." }, 400, request);
   }
 
   // 4. Schema Validation
@@ -192,7 +211,7 @@ async function handleLeadSubmission(request: Request, env: Env): Promise<Respons
   }
 
   const serviceType = body.serviceType || body.service || "roof-repair";
-  const allowedServices = ["roof-repair", "roof-replacement", "roof-inspection", "roof-tuneup", "emergency-storm"];
+  const allowedServices = siteConfig.allowedServices;
   if (!allowedServices.includes(serviceType)) {
     errors.serviceType = "Please select a valid service type";
   }
@@ -200,118 +219,135 @@ async function handleLeadSubmission(request: Request, env: Env): Promise<Respons
   const message = (body.message || body.notes || "").trim();
 
   if (Object.keys(errors).length > 0) {
-    return jsonResponse({ error: "Validation failed", details: errors }, 422);
+    return jsonResponse({ error: "Validation failed", details: errors }, 422, request);
   }
 
   const leadId = `lead_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   let whopLeadId: string | undefined = undefined;
 
-  // 5. Call Whop Leads API (POST /api/v1/leads) if configured
+  // 5. Call Whop Leads API (POST /api/v1/leads) per Create Lead docs
   const apiOrigin = env.WHOP_API_ORIGIN || "https://sandbox-api.whop.com";
-  const accountId = env.WHOP_ACCOUNT_ID || "biz_test_peakguard_roofing";
+  const accountId = env.WHOP_ACCOUNT_ID || siteConfig.whop.accountId;
   const apiKey = env.WHOP_API_KEY || "";
 
-  if (apiKey) {
-    try {
-      const whopLeadRes = await fetch(`${apiOrigin}/api/v1/leads`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "Api-Version-Date": "2026-08-14",
-        },
-        body: JSON.stringify({
-          account_id: accountId,
-          metadata: {
-            lead_id: leadId,
-            name,
-            email,
-            phone,
-            address,
-            zip_code: zip,
-            service_type: serviceType,
-            message,
-          },
-        }),
-      });
-
-      if (whopLeadRes.ok) {
-        const whopData = await whopLeadRes.json() as any;
-        whopLeadId = whopData.id;
-      } else {
-        console.warn(`[Whop Leads API Non-Fatal Warning] status=${whopLeadRes.status}`);
-      }
-    } catch (err) {
-      console.warn("[Whop Leads API Network Warning]", err);
-    }
+  if (!accountId) {
+    return jsonResponse(
+      { error: "Whop Account ID not configured (WHOP_ACCOUNT_ID missing)" },
+      500,
+      request
+    );
   }
 
-  // 6. Record in memory
-  const storedLead: StoredLead = {
-    id: leadId,
-    name,
-    email,
-    phone,
-    address,
-    zipCode: zip,
-    serviceType,
-    message,
-    createdAt: new Date().toISOString(),
-    ip: clientIp,
-    whopLeadId,
-  };
-  memoryLeads.unshift(storedLead);
-  if (memoryLeads.length > 100) memoryLeads.pop();
+  if (!apiKey && !env.WHOP_API_ORIGIN) {
+    return jsonResponse(
+      { error: "Whop API credentials not configured (WHOP_API_KEY missing)" },
+      503,
+      request
+    );
+  }
 
-  console.log(`[PeakGuard Lead Created] ID=${leadId} Service=${serviceType} Email=${email} ZIP=${zip}`);
+  const leadHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Api-Version-Date": "2026-11-07",
+  };
+  if (apiKey) {
+    leadHeaders["Authorization"] = `Bearer ${apiKey}`;
+  }
+
+  try {
+    const whopLeadRes = await fetch(`${apiOrigin}/api/v1/leads`, {
+      method: "POST",
+      headers: leadHeaders,
+      body: JSON.stringify({
+        account_id: accountId,
+        metadata: {
+          lead_id: leadId,
+          name,
+          email,
+          phone,
+          address,
+          zip_code: zip,
+          service_type: serviceType,
+          message,
+        },
+      }),
+    });
+
+    if (!whopLeadRes.ok) {
+      const errText = await whopLeadRes.text();
+      console.error(`[Whop Leads API Error] status=${whopLeadRes.status} body=${errText}`);
+      return jsonResponse(
+        { error: `Whop Leads API error (${whopLeadRes.status}): ${errText}` },
+        whopLeadRes.status >= 500 ? 502 : whopLeadRes.status,
+        request
+      );
+    }
+
+    const whopData = (await whopLeadRes.json()) as any;
+    whopLeadId = whopData.id;
+  } catch (err: any) {
+    console.error("[Whop Leads API Network Error]", err);
+    return jsonResponse(
+      { error: `Whop Leads API connection failed: ${err.message}` },
+      502,
+      request
+    );
+  }
+
+  console.log(`[PeakGuard Lead Created] ID=${leadId} WhopID=${whopLeadId} Service=${serviceType} Email=${email} ZIP=${zip}`);
 
   return jsonResponse({
     success: true,
     leadId,
     whopLeadId,
     message: "Estimate request received successfully. A roofing specialist will contact you within 24 hours.",
-  });
+  }, 200, request);
 }
 
 /**
  * Handle Final Balance Invoice creation (POST /api/invoice/final-balance & POST /api/invoices/final-balance)
- * Strictly protected by x-admin-secret header.
+ * Strictly protected by constant-time x-admin-secret header check.
  * Mode flag:
  *   - "auto_charge" (or "charge"): auto-charges customer's stored payment method (from setup intent)
- *   - "send_manual" (or "send"): creates invoice and emails payment link to customer
+ *   - "send_manual" (or "send"): creates draft invoice, issues, and emails payment link to customer
  */
 async function handleFinalBalanceInvoice(request: Request, env: Env): Promise<Response> {
-  // 1. Authentication check
+  // 1. Strict Authentication check: no default secret fallback; constant-time compare
   const adminSecretHeader = request.headers.get("x-admin-secret");
-  const configuredAdminSecret = env.ADMIN_SECRET || "development-secret-change-me";
+  const configuredAdminSecret = env.ADMIN_SECRET;
 
-  if (!adminSecretHeader || adminSecretHeader !== configuredAdminSecret) {
-    return jsonResponse({ error: "Unauthorized: Invalid or missing x-admin-secret header" }, 401);
+  if (!configuredAdminSecret) {
+    console.error("[Final Balance Invoice] Server configuration error: ADMIN_SECRET not set");
+    return jsonResponse({ error: "Server configuration error: ADMIN_SECRET is not configured" }, 500, request);
+  }
+
+  if (!adminSecretHeader || !timingSafeEqual(adminSecretHeader, configuredAdminSecret)) {
+    return jsonResponse({ error: "Unauthorized: Invalid or missing x-admin-secret header" }, 401, request);
   }
 
   let body: InvoiceRequestBody;
   try {
     body = await request.json();
   } catch {
-    return jsonResponse({ error: "Invalid JSON request body" }, 400);
+    return jsonResponse({ error: "Invalid JSON request body" }, 400, request);
   }
 
   // Validation
   if (!body.recipientEmail || !body.recipientEmail.includes("@")) {
-    return jsonResponse({ error: "Valid recipientEmail is required" }, 400);
+    return jsonResponse({ error: "Valid recipientEmail is required" }, 400, request);
   }
 
   if (typeof body.originalEstimateTotal !== "number" || body.originalEstimateTotal <= 0) {
-    return jsonResponse({ error: "originalEstimateTotal must be a positive number" }, 400);
+    return jsonResponse({ error: "originalEstimateTotal must be a positive number" }, 400, request);
   }
 
-  const deposit = typeof body.depositPaid === "number" ? body.depositPaid : 500;
+  const deposit = typeof body.depositPaid === "number" ? body.depositPaid : siteConfig.defaultDepositAmount;
   const balanceDue = body.originalEstimateTotal - deposit;
 
   if (balanceDue <= 0) {
     return jsonResponse({
       error: `Invalid calculation: Total ($${body.originalEstimateTotal}) minus deposit ($${deposit}) leaves no balance due ($${balanceDue})`,
-    }, 400);
+    }, 400, request);
   }
 
   // Normalize mode flag ("auto_charge" vs "send_manual")
@@ -320,31 +356,61 @@ async function handleFinalBalanceInvoice(request: Request, env: Env): Promise<Re
   if (mode === "auto_charge" && !body.paymentMethodId) {
     return jsonResponse({
       error: "paymentMethodId is required when mode is 'auto_charge'. To send an email invoice without a saved card, use mode 'send_manual'.",
-    }, 400);
+    }, 400, request);
   }
 
   const apiOrigin = env.WHOP_API_ORIGIN || "https://sandbox-api.whop.com";
-  const accountId = env.WHOP_ACCOUNT_ID || "biz_test_peakguard_roofing";
+  const accountId = env.WHOP_ACCOUNT_ID || siteConfig.whop.accountId;
   const apiKey = env.WHOP_API_KEY || "";
 
-  const lineItems = [
-    {
-      description: `Roofing Project Completion — Final Balance (Total $${body.originalEstimateTotal.toFixed(2)} less $${deposit.toFixed(2)} deposit credited)`,
-      unit_amount: balanceDue,
-      quantity: 1,
-    },
-  ];
+  if (!accountId) {
+    return jsonResponse(
+      { error: "Whop Account ID not configured (WHOP_ACCOUNT_ID missing)" },
+      500,
+      request
+    );
+  }
+
+  if (!apiKey && !env.WHOP_API_ORIGIN) {
+    return jsonResponse(
+      { error: "Whop API credentials not configured (WHOP_API_KEY required)" },
+      503,
+      request
+    );
+  }
+
+  const invoiceHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "Api-Version-Date": "2026-10-24",
+    "Idempotency-Key": crypto.randomUUID(),
+  };
+  if (apiKey) {
+    invoiceHeaders["Authorization"] = `Bearer ${apiKey}`;
+  }
 
   try {
     // 1. Create draft invoice via Whop Invoices API (POST /api/v1/invoices)
+    // Documented schema: collection_method, variant, customer via member_id or email_address + customer_name
     const invoicePayload = {
       account_id: accountId,
+      email_address: body.memberId ? undefined : body.recipientEmail,
+      customer_name: body.memberId ? undefined : (body.customerName || body.recipientEmail),
       member_id: body.memberId,
-      recipient_emails: [body.recipientEmail],
-      memo: body.memo || `Final balance invoice for roofing completion. Customer: ${body.customerName || body.recipientEmail}`,
-      currency: "usd",
-      line_items: lineItems,
+      items: [
+        {
+          quantity: 1,
+          description: `Roofing Project Completion — Final Balance (Total $${body.originalEstimateTotal.toFixed(2)} less $${deposit.toFixed(2)} deposit credited)`,
+          variant: {
+            title: "Roofing Project Final Balance",
+            currency: "usd",
+            initial_price: balanceDue,
+            billing_type: "one_time",
+          },
+        },
+      ],
       payment_method_id: body.paymentMethodId,
+      memo: body.memo || `Final balance invoice for roofing completion. Customer: ${body.customerName || body.recipientEmail}`,
+      due_at: new Date(Date.now() + 14 * 86400000).toISOString(),
       metadata: {
         customer_name: body.customerName || "",
         original_total: String(body.originalEstimateTotal),
@@ -355,62 +421,55 @@ async function handleFinalBalanceInvoice(request: Request, env: Env): Promise<Re
       },
     };
 
-    let invoiceResult: any;
+    const createRes = await fetch(`${apiOrigin}/api/v1/invoices`, {
+      method: "POST",
+      headers: invoiceHeaders,
+      body: JSON.stringify(invoicePayload),
+    });
 
-    if (apiKey) {
-      const createRes = await fetch(`${apiOrigin}/api/v1/invoices`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "Api-Version-Date": "2026-08-14",
-        },
-        body: JSON.stringify(invoicePayload),
-      });
-
-      if (!createRes.ok) {
-        const errText = await createRes.text();
-        throw new Error(`Whop API error [${createRes.status}]: ${errText}`);
-      }
-
-      invoiceResult = await createRes.json();
-    } else {
-      // Simulation mode when testing without live key
-      invoiceResult = {
-        id: `pay_mock_inv_${Date.now()}`,
-        account_id: accountId,
-        status: "draft",
-        total_amount: balanceDue,
-        currency: "usd",
-        recipient_emails: [body.recipientEmail],
-        hosted_invoice_url: `https://whop.com/invoices/pay_mock_inv_${Date.now()}`,
-        created_at: new Date().toISOString(),
-        simulated: true,
-      };
+    if (!createRes.ok) {
+      const errText = await createRes.text();
+      return jsonResponse(
+        { error: `Whop Invoices API rejected draft (${createRes.status}): ${errText}` },
+        createRes.status >= 500 ? 502 : createRes.status,
+        request
+      );
     }
 
-    // 2. Perform requested action (auto_charge or send_manual)
+    const invoiceResult = await createRes.json();
+
+    // 2. Perform requested action (auto_charge or send_manual) via documented endpoints
     let actionResult: any = { mode };
 
-    if (mode === "auto_charge" && invoiceResult.id && apiKey) {
+    if (mode === "auto_charge" && invoiceResult.id) {
       const chargeRes = await fetch(`${apiOrigin}/api/v1/invoices/${invoiceResult.id}/charge`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "Api-Version-Date": "2026-08-14",
-        },
+        headers: invoiceHeaders,
+        body: body.paymentMethodId ? JSON.stringify({ payment_method_id: body.paymentMethodId }) : undefined,
       });
+      if (!chargeRes.ok) {
+        const errText = await chargeRes.text();
+        return jsonResponse(
+          { error: `Whop Invoices charge failed (${chargeRes.status}): ${errText}`, invoice: invoiceResult },
+          chargeRes.status >= 500 ? 502 : chargeRes.status,
+          request
+        );
+      }
       actionResult = await chargeRes.json();
-    } else if (mode === "send_manual" && invoiceResult.id && apiKey) {
+    } else if (mode === "send_manual" && invoiceResult.id) {
       const sendRes = await fetch(`${apiOrigin}/api/v1/invoices/${invoiceResult.id}/send`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "Api-Version-Date": "2026-08-14",
-        },
+        headers: invoiceHeaders,
+        body: JSON.stringify({ collection_method: "send_invoice" }),
       });
+      if (!sendRes.ok) {
+        const errText = await sendRes.text();
+        return jsonResponse(
+          { error: `Whop Invoices send failed (${sendRes.status}): ${errText}`, invoice: invoiceResult },
+          sendRes.status >= 500 ? 502 : sendRes.status,
+          request
+        );
+      }
       actionResult = await sendRes.json();
     }
 
@@ -428,61 +487,73 @@ async function handleFinalBalanceInvoice(request: Request, env: Env): Promise<Re
         balanceBilled: balanceDue,
         recipient: body.recipientEmail,
       },
-    });
+    }, 200, request);
   } catch (err: any) {
     console.error("[PeakGuard Invoice Error]", err);
-    return jsonResponse({ error: err.message || "Failed to create final balance invoice" }, 500);
+    return jsonResponse({ error: err.message || "Failed to create final balance invoice" }, 500, request);
   }
 }
 
 /**
  * Handle Whop Webhooks
- * Verifies HMAC-SHA256 signature and processes payment.succeeded / setup_intent.succeeded
+ * Verifies Standard Webhooks HMAC-SHA256 signature with replay window check,
+ * and processes payment.succeeded / setup_intent.succeeded
  */
 async function handleWhopWebhook(request: Request, env: Env): Promise<Response> {
   const webhookId = request.headers.get("webhook-id");
   const webhookTimestamp = request.headers.get("webhook-timestamp");
   const webhookSignature = request.headers.get("webhook-signature");
+  const webhookSecret = env.WHOP_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.error("[Whop Webhook] WHOP_WEBHOOK_SECRET not configured on server");
+    return jsonResponse({ error: "Webhook secret not configured on server" }, 401, request);
+  }
 
   if (!webhookId || !webhookTimestamp || !webhookSignature) {
-    return jsonResponse({ error: "Missing required Whop webhook headers" }, 400);
+    return jsonResponse({ error: "Missing required Whop webhook headers" }, 400, request);
+  }
+
+  // Prevent replay attacks (reject if timestamp is older or future beyond 5 minutes / 300 seconds)
+  const nowSec = Math.floor(Date.now() / 1000);
+  const tsSec = parseInt(webhookTimestamp, 10);
+  if (isNaN(tsSec) || Math.abs(nowSec - tsSec) > 300) {
+    return jsonResponse({ error: "Webhook timestamp expired or out of tolerance" }, 401, request);
   }
 
   const rawBody = await request.text();
-  const webhookSecret = env.WHOP_WEBHOOK_SECRET;
 
-  if (webhookSecret && webhookSecret !== "ws_REPLACE_ME") {
-    try {
-      const encoder = new TextEncoder();
-      const keyData = encoder.encode(webhookSecret);
-      const cryptoKey = await crypto.subtle.importKey(
-        "raw",
-        keyData,
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"]
-      );
-      const signedContent = `${webhookId}.${webhookTimestamp}.${rawBody}`;
-      const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(signedContent));
-      const expectedSignature = `v1,${btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))}`;
+  try {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(webhookSecret);
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyData,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+    const signedContent = `${webhookId}.${webhookTimestamp}.${rawBody}`;
+    const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(signedContent));
+    const expectedSignature = `v1,${btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))}`;
 
-      if (webhookSignature !== expectedSignature) {
-        console.warn("[Webhook] Signature verification mismatch");
-        return jsonResponse({ error: "Invalid webhook signature" }, 401);
-      }
-    } catch (e) {
-      console.error("[Webhook] Verification error", e);
+    if (!timingSafeEqual(webhookSignature, expectedSignature)) {
+      console.warn("[Webhook] Signature verification mismatch");
+      return jsonResponse({ error: "Invalid webhook signature" }, 401, request);
     }
+  } catch (e: any) {
+    console.error("[Webhook] Verification error", e);
+    return jsonResponse({ error: "Signature verification execution failed" }, 401, request);
   }
 
   let event: any;
   try {
     event = JSON.parse(rawBody);
   } catch {
-    return jsonResponse({ error: "Invalid JSON in webhook payload" }, 400);
+    return jsonResponse({ error: "Invalid JSON in webhook payload" }, 400, request);
   }
 
-  console.log(`[Whop Webhook Received] type=${event.type} id=${event.id}`);
+  console.log(`[Whop Webhook Verified] type=${event.type} id=${event.id}`);
 
   switch (event.type) {
     case "setup_intent.succeeded":
@@ -501,7 +572,7 @@ async function handleWhopWebhook(request: Request, env: Env): Promise<Response> 
       console.log(`[Webhook] Unhandled event type: ${event.type}`);
   }
 
-  return jsonResponse({ received: true });
+  return jsonResponse({ received: true }, 200, request);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -513,33 +584,48 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
-      return corsPreflight();
+      return corsPreflight(request);
     }
 
-    // Estimate & Leads endpoints (both /api/estimate and /api/leads supported)
+    // Estimate & Leads endpoints (POST only — public GET listing removed per security contract)
     if ((url.pathname === "/api/estimate" || url.pathname === "/api/leads") && request.method === "POST") {
       return handleLeadSubmission(request, env);
     }
 
-    if ((url.pathname === "/api/estimate" || url.pathname === "/api/leads") && request.method === "GET") {
-      return jsonResponse({
-        status: "ok",
-        count: memoryLeads.length,
-        recent: memoryLeads.slice(0, 5).map((l) => ({
-          id: l.id,
-          service: l.serviceType,
-          zip: l.zipCode,
-          createdAt: l.createdAt,
-        })),
-      });
-    }
-
-    // Final balance invoice endpoints (both singular /api/invoice/... and plural /api/invoices/... supported)
+    // Final balance invoice endpoints
     if (
       (url.pathname === "/api/invoice/final-balance" || url.pathname === "/api/invoices/final-balance") &&
       request.method === "POST"
     ) {
       return handleFinalBalanceInvoice(request, env);
+    }
+
+    // Whop Setup Intent Lookup (for post-checkout payment method confirmation)
+    if (url.pathname === "/api/setup-intents" && request.method === "GET") {
+      const id = url.searchParams.get("id");
+      if (!id) return jsonResponse({ error: "Setup intent ID required" }, 400, request);
+
+      const apiOrigin = env.WHOP_API_ORIGIN || "https://sandbox-api.whop.com";
+      const apiKey = env.WHOP_API_KEY || "";
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Api-Version-Date": "2026-11-07",
+      };
+      if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+      try {
+        const res = await fetch(`${apiOrigin}/api/v1/setup-intents/${encodeURIComponent(id)}`, {
+          headers,
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          return jsonResponse({ error: `Setup intent lookup failed: ${errText}` }, res.status, request);
+        }
+        const data = await res.json();
+        return jsonResponse(data, 200, request);
+      } catch (err: any) {
+        return jsonResponse({ error: err.message }, 502, request);
+      }
     }
 
     // Whop Webhook handler
@@ -554,7 +640,7 @@ export default {
         app: "peakguard-roofing",
         runtime: "whop-hosting",
         timestamp: new Date().toISOString(),
-      });
+      }, 200, request);
     }
 
     // Static assets fallback

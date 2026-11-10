@@ -34,7 +34,14 @@ export interface SiteConfig {
     yearsInBusiness: number;
     hours: string;
     emergencyHours: string;
+    rating: {
+      score: string;
+      reviewCount: string;
+      label: string;
+    };
   };
+  allowedServices: string[];
+  defaultDepositAmount: number;
   brand: {
     primaryColor: string;      // Deep slate / navy
     primaryHover: string;
@@ -47,6 +54,7 @@ export interface SiteConfig {
   };
   // Whop account & plan configuration
   whop: {
+    websiteRoute: string;
     // Your Whop Account ID (begins with biz_). Found in dashboard > Developer.
     accountId: string;
     // Whop plans for direct checkout. Created via CLI or Dashboard.
@@ -138,7 +146,21 @@ export const siteConfig: SiteConfig = {
     yearsInBusiness: 18,
     hours: "Monday – Saturday: 7:00 AM – 7:00 PM CST",
     emergencyHours: "24/7 Emergency Storm Dispatch (Sample Availability)",
+    rating: {
+      score: "4.9/5.0 (Sample)",
+      reviewCount: "450+ (Sample Reviews)",
+      label: "Sample Customer Satisfaction",
+    },
   },
+
+  allowedServices: [
+    "roof-repair",
+    "roof-replacement",
+    "roof-inspection",
+    "roof-tuneup",
+    "emergency-storm",
+  ],
+  defaultDepositAmount: 500,
 
   brand: {
     primaryColor: "#0f172a",    // slate-900: trustworthy, institutional
@@ -158,7 +180,8 @@ export const siteConfig: SiteConfig = {
   // via the Whop CLI or Dashboard. See README.md for instructions.
   // ──────────────────────────────────────────────────────────────────────────
   whop: {
-    accountId: "biz_test_peakguard_roofing",
+    websiteRoute: "peakguard-roofing",
+    accountId: "", // Injected by Whop hosting runtime via env.WHOP_ACCOUNT_ID or configured in secrets
     plans: {
       // 1. Roof Inspection — one-time $149
       inspection: {

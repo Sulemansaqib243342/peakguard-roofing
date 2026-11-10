@@ -1,151 +1,136 @@
 # PeakGuard Roofing — Verification & Testing Checklist
 
 This checklist verifies all required Whop integrations end-to-end:
-1. **Whop Pixel Debugger** (rendered via `?debug=1`, static dot, events logged)
-2. **Whop Payments Sandbox Checkout** (including card-on-file setup intent)
-3. **Estimate Form & Whop Leads** (server-side validation, rate limiting, honeypot, Whop Leads API)
-4. **Final Balance Invoicing** (Option A: `auto_charge` & Option B: `send_manual`)
-5. **Custom Pixel Tracking Events** (`estimate_requested`, `service_viewed`, `deposit_started`)
+1. **Real Sandbox Checkout** (Whop Elements, status verification, setup intent)
+2. **Whop Leads Creation** (Visible in Whop Dashboard with metadata)
+3. **Final Balance Invoicing** (Option A: `auto_charge` & Option B: `send_manual` via Whop Invoices API)
+4. **Three Custom Tracking Events** (`estimate_requested`, `service_viewed`, `deposit_started`)
+5. **Whop Pixel Debugger** (`?debug=1`, static dot, event inspection)
 
 ---
 
-## 1. Whop Pixel Debugger (`?debug=1`)
-- [ ] Open `http://localhost:3000` directly.
-  - Verify that the bottom-right debugger pill is **hidden by default**.
-- [ ] Open `http://localhost:3000/?debug=1`.
-  - Verify that the **Whop Pixel Debugger** pill appears in the bottom-right corner.
-  - Verify the indicator dot is **static** (zero blinking, pulsing, or ping animations).
-- [ ] Click to expand the drawer.
-- [ ] Perform actions on the site and verify events populate in real time with parameters:
-  - Click any service card -> `service_viewed`
-  - Click "Reserve with $500 Deposit" -> `deposit_started`
-  - Submit the estimate form -> `estimate_requested` & `lead`
+## 1. Whop Payments Sandbox Checkout
 
----
+### Test 1.1: Inspection Booking ($149)
+- [ ] Start dev server (`npm run dev`) and navigate to `http://localhost:3000`.
+- [ ] Click **"Book $149 Inspection"** in the Hero section or header navigation.
+- [ ] Verify checkout modal opens displaying:
+  - Header: "Comprehensive Roof Inspection" and price: "$149".
+  - Express Checkout element (Apple Pay / Google Pay button).
+  - Full Whop Checkout element (`CheckoutElement`) with card input fields, live order summary, and pay button.
+- [ ] Enter a test sandbox card in the element and complete payment:
+  - Whop redirects to `/checkout/return?status=succeeded&plan=plan_xxx&payment=pay_xxx`.
+  - Verify `CheckoutReturnPage` reads `status=succeeded` and renders the green confirmation card with the real `payment` ID.
+  - Test negative query parameter states:
+    - `/checkout/return?status=failed` -> Renders "Payment Unsuccessful".
+    - `/checkout/return?status=canceled` -> Renders "Checkout Canceled".
+    - `/checkout/return` (no status) -> Renders "Invalid Checkout State".
 
-## 2. Whop Payments Sandbox Checkout
-
-### Test 2.1: Inspection Booking ($149)
-- [ ] Navigate to `http://localhost:3000`.
-- [ ] Click **"Book $149 Inspection"** in the Hero or navigation.
-- [ ] Verify modal opens displaying:
-  - Header with title: "Comprehensive Roof Inspection" and price: "$149".
-  - Whop Express Checkout element (Apple Pay / Google Pay button).
-  - Whop Payment element (`EmailElement`, `PaymentElement`, and required `BrandingElement`).
-- [ ] In sandbox mode, complete checkout or click the test return link:
-  - Verify redirect to `/checkout/return?status=succeeded&plan=plan_roof_inspection_149`.
-  - Verify confirmation screen shows transaction ID and scheduling instructions.
-
-### Test 2.2: Project Deposit ($500) with Card Saved on File (Setup Intent)
-- [ ] On the pricing section, locate the **Project Deposit** card ($500).
+### Test 1.2: Project Deposit ($500) with Stored Payment Method (Setup Intent)
+- [ ] In the pricing section, locate the **Project Deposit** card ($500).
 - [ ] Click **"Reserve with $500 Deposit"**.
-- [ ] Verify checkout modal displays the card-on-file notice explaining that the card is saved for post-job settlement.
-- [ ] Elements mount with `setupFutureUsage="off_session"` (as specified in Whop Save Payment Methods guide).
-- [ ] Complete payment / simulate return:
-  - Verify return page displays: **"Card Saved on File for Final Balance"** callout.
-  - Notice text confirming $500 will be credited against the final balance invoice.
+- [ ] Verify checkout modal displays the setup intent notice: "Card Authorized on File via Setup Intent".
+- [ ] Complete payment in sandbox:
+  - Redirects to `/checkout/return?status=succeeded&setup_intent_id=sint_xxx`.
+  - Verify `CheckoutReturnPage` calls `GET /api/setup-intents?id=sint_xxx`.
+  - Notice renders: **"Card Saved on File via Setup Intent"** with the setup intent ID or confirmed payment method ID.
+  - Notice confirms $500 will be credited against the final balance invoice upon project completion.
 
-### Test 2.3: Flat-Rate Roof Tune-Up ($299)
+### Test 1.3: Flat-Rate Roof Tune-Up ($299)
 - [ ] Click **"Book $299 Tune-Up"**.
 - [ ] Verify modal mounts with price $299.
-- [ ] Complete flow and verify return receipt.
+- [ ] Complete payment and verify return receipt.
 
 ---
 
-## 3. Estimate Form & Whop Leads Creation (`POST /api/estimate`)
+## 2. Lead Visible in Whop Dashboard (`POST /api/estimate`)
 
-### Test 3.1: Client-Side Validation
+### Test 2.1: Client & Server Validation
 - [ ] Scroll to the **Request Your Detailed Roofing Estimate** section (`#estimate`).
-- [ ] Click **"Submit Estimate Request"** with empty fields.
-- [ ] Verify client-side error highlights on Name, Email, Phone, Address, and ZIP Code.
+- [ ] Click **"Submit Estimate Request"** with blank fields.
+- [ ] Verify client-side error states on Name, Email, Phone, Address, and ZIP Code.
 
-### Test 3.2: Spam Honeypot & Timing Trap
-- [ ] The hidden field `honeypot` is omitted from user view (`aria-hidden="true"`).
-- [ ] If filled (by bot automation), `/api/estimate` silently returns HTTP 200 without creating a record.
-- [ ] If submitted in < 1,500ms, returns HTTP 400 rejection.
+### Test 2.2: Honeypot Anti-Spam & Rate Limiting
+- [ ] Submit with the hidden `honeypot` field filled: verify server returns silent 200 without creating a lead.
+- [ ] Submit 6 requests in under 60 seconds from the same IP: verify server returns HTTP 429 `"Too many requests"`.
 
-### Test 3.3: Rate Limiting
-- [ ] Submit more than 5 requests within 60 seconds from the same IP.
-- [ ] Verify returns HTTP 429 Too Many Requests: `"Too many requests. Please wait a minute before submitting again."`
-
-### Test 3.4: Valid Submission & Server Verification
-- [ ] Enter valid details:
-  - Name: `Robert Miller`
-  - Phone: `555-732-5482`
-  - Email: `rmiller.dfw@example.com`
-  - Address: `4520 Preston Road`
-  - ZIP: `75205`
-  - Service: `Roof Repair & Emergency Leak Stop`
+### Test 2.3: Real Whop Dashboard Lead Creation
+- [ ] Fill the form with valid homeowner data:
+  - **Full Name**: `Marcus Vance`
+  - **Phone**: `(555) 732-5482`
+  - **Email**: `marcus.vance@example.com`
+  - **Address**: `742 Evergreen Terrace`
+  - **ZIP Code**: `75201`
+  - **Service**: `Roof Replacement & Architectural Shingles`
+  - **Notes**: `Hail damage assessment needed after recent spring storm.`
 - [ ] Click **"Submit Estimate Request"**.
-- [ ] Verify:
-  - Button transitions to **"Validating & Submitting..."** with spinner (double-submit prevented).
-  - Form transitions to the green **"Estimate Request Received!"** state.
-  - Reference ID displayed (`lead_...`).
-  - Whop tracking events fire: `lead` and `estimate_requested`.
-
-### Test 3.5: Server-Side Diagnostic
-- [ ] Visit `http://localhost:3000/api/estimate` in your browser.
-- [ ] Verify JSON returns the lead count and recent sanitized submissions:
-  ```json
-  {
-    "status": "ok",
-    "count": 1,
-    "recent": [{ "id": "lead_...", "service": "roof-repair", "zip": "75205" }]
-  }
-  ```
+- [ ] Form transitions to the green **"Estimate Request Received!"** state.
+- [ ] Verify in **Whop Dashboard** > **Leads**:
+  - Open `https://whop.com/dashboard/leads` (or sandbox).
+  - Verify a lead entry exists for `Marcus Vance`.
+  - Inspect custom metadata: phone `5557325482`, address `742 Evergreen Terrace`, ZIP `75201`, and service type `roof-replacement`.
 
 ---
 
-## 4. Final Balance Invoicing API (`POST /api/invoice/final-balance`)
+## 3. Final Balance Invoicing API (`POST /api/invoice/final-balance`)
 
-The endpoint `POST /api/invoice/final-balance` is protected by `x-admin-secret`.
+Protected by `x-admin-secret` header using constant-time comparison.
 
-### Test 4.1: Security Gate (Unauthorized Request)
-- [ ] Run in terminal:
+### Test 3.1: Security Gate (Unauthorized Rejection)
+- [ ] Send request without `x-admin-secret`:
   ```bash
   curl -X POST http://localhost:3000/api/invoice/final-balance \
     -H "Content-Type: application/json" \
-    -d '{"recipientEmail": "test@example.com"}'
+    -d '{"recipientEmail": "homeowner@example.com", "originalEstimateTotal": 8500}'
   ```
-- [ ] Verify returns **HTTP 401 Unauthorized**: `"Invalid or missing x-admin-secret header"`.
+- [ ] Verify server returns **HTTP 401 Unauthorized**: `"Invalid or missing x-admin-secret header"`.
 
-### Test 4.2: Option A — Auto-Charge Saved Card on File (`mode: "auto_charge"`)
-- [ ] Visit `/admin/invoicing`.
-- [ ] Authenticate with `development-secret-change-me` (or your configured `ADMIN_SECRET`).
-- [ ] Fill form:
-  - Recipient Email: `homeowner@example.com`
-  - Original Estimate: `$8,500`
-  - Deposit Paid: `$500`
-  - Net Balance Calculated: **`$8,000.00`**
-  - Select: **Option A: Auto-Charge**
-  - Stored Payment Method ID: `payt_test_stored_card_4242`
-- [ ] Click **"Create & Auto-Charge Balance ($8,000.00)"**.
-- [ ] Verify success response:
-  - Whop invoice created (`pay_...`).
-  - Invoice charge called (`/invoices/:id/charge`).
-  - Audit breakdown: Original $8,500 - Deposit $500 = $8,000 billed.
+### Test 3.2: Option A — Auto-Charge Saved Method (`mode: "auto_charge"`)
+- [ ] Open `/admin/invoicing` in your browser.
+- [ ] Enter your configured `ADMIN_SECRET`.
+- [ ] Provide details:
+  - **Recipient Email**: `marcus.vance@example.com`
+  - **Original Estimate**: `$9,500.00`
+  - **Deposit Paid**: `$500.00`
+  - **Calculated Balance**: **`$9,000.00`**
+  - **Mode**: Option A (Auto-Charge Saved Method)
+  - **Stored Payment Method ID**: `payt_xxxxxxxxxxxx` (obtained from deposit setup intent)
+- [ ] Click **"Create & Auto-Charge Balance ($9,000.00)"**.
+- [ ] Verify server executes `POST /api/v1/invoices` followed by `POST /api/v1/invoices/:id/charge`.
+- [ ] Open **Whop Dashboard > Invoices** to see the draft created and charge initiated.
 
-### Test 4.3: Option B — Send Email Invoice for Manual Payment (`mode: "send_manual"`)
+### Test 3.3: Option B — Send Manual Invoice with Hosted Pay Link (`mode: "send_manual"`)
 - [ ] On `/admin/invoicing`, select **Option B: Send Email**.
+- [ ] Provide customer email and estimate total.
 - [ ] Click **"Create & Email Invoice Link"**.
-- [ ] Verify response indicates invoice sent to customer with hosted payment URL.
-
-### Test 4.4: CLI Test Script
-- [ ] Run:
-  ```bash
-  npx tsx scripts/test-invoice.ts send_manual client@example.com 9500
-  ```
-- [ ] Verify terminal outputs formatted invoice dispatch with HTTP 200 result.
+- [ ] Verify server executes `POST /api/v1/invoices` followed by `POST /api/v1/invoices/:id/send` with `collection_method: "send_invoice"`.
+- [ ] Customer receives email with hosted invoice link (`https://whop.com/checkout/...`).
 
 ---
 
-## 5. Mobile & Responsive Layout
-- [ ] At 360px width:
-  - Verify sticky bottom bar is visible with **"Call Now"** and **"Book Inspection"**.
-  - Header navigation collapses into a clean hamburger menu.
-  - Heading clamp adapts smoothly without overflow.
-- [ ] At 768px (Tablet):
-  - 2-column service card layout renders cleanly.
-- [ ] At 1200px+ (Desktop):
-  - Sticky mobile bar hides (`md:hidden`).
-  - Container stays centered at max 1200px.
+## 4. Custom Tracking Events (`whop.track`)
+
+Verify the 3 required custom events:
+
+### Test 4.1: `service_viewed`
+- [ ] Click any service card on the homepage (e.g. Roof Repair, Roof Inspection, Roof Replacement).
+- [ ] Verify `service_viewed` fires with `{ id, title, variantId }`.
+
+### Test 4.2: `deposit_started`
+- [ ] Click **"Reserve with $500 Deposit"** on the pricing card.
+- [ ] Verify `deposit_started` fires with `{ planId, depositAmount: 500, savesCardOnFile: true }`.
+
+### Test 4.3: `estimate_requested`
+- [ ] Submit the estimate form on `#estimate`.
+- [ ] Verify `estimate_requested` fires with `{ serviceType, zipCode, eventId }`.
+
+---
+
+## 5. Whop Pixel Debugger Toolbar
+
+- [ ] Open `http://localhost:3000` (without query params): toolbar is **hidden**.
+- [ ] Open `http://localhost:3000/?debug=1`:
+  - Floating pill appears in the bottom-right corner.
+  - Indicator dot is **static amber** (no pulsing or ping animations).
+  - Click the pill to expand the event log.
+  - Verify every triggered event (`service_viewed`, `deposit_started`, `estimate_requested`) appears with full JSON payloads in the inspector drawer.

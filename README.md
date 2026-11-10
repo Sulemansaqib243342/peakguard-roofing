@@ -1,18 +1,19 @@
 # PeakGuard Roofing Co. — Whop Website Template
 
-A production-ready, reusable website template for US roofing contractors, built with **Vite + React + TypeScript + Tailwind CSS** and deployed as a Whop Website (`app_type: "website"`) on Whop's Cloudflare-powered hosting runtime.
+A production-ready, reusable website template for US roofing contractors, built with **Vite + React + TypeScript + Tailwind CSS** and deployed as a Whop Website (`app_type: "website"`) on Whop's Cloudflare-powered hosting runtime at a live **`<route>.whop.app`** URL.
 
 ---
 
 ## 🏗️ Implemented Whop Features Summary
 
-PeakGuard Roofing deeply integrates with Whop's commerce and developer platform:
-- **Whop Elements**: `<WhopElements>`, `<Payments>`, `<Checkout>`, `<PaymentElement>`, `<EmailElement>`, `<ExpressCheckoutElement>` (Apple Pay & Google Pay), and the mandatory `<BrandingElement>`.
-- **Card-on-File Setup Intents**: Automatic `setupFutureUsage="off_session"` on the $500 Project Deposit checkout, saving customer payment methods for post-installation invoicing.
-- **Whop Invoices API (`/api/v1/invoices`)**: Secure server-side endpoint (`/api/invoices/final-balance`) with both **Option A (Auto-charge stored method)** and **Option B (Send email link for manual settlement)** with deposit credit deduction.
-- **Whop Visitor Tracking (`whop.track`)**: Real-time event dispatching for `estimate_requested`, `service_viewed`, and `deposit_started`, alongside standard `lead` and `view_content` events, paired with an in-browser dev debug inspector.
-- **Whop Webhooks**: Cryptographic HMAC-SHA256 signature verification handling `payment.succeeded`, `setup_intent.succeeded`, and `invoice.paid`.
-- **Whop Hosting Runtime**: Clean separation of client and server code via Cloudflare Workers (`ASSETS` binding, `WHOP_API_ORIGIN` proxying, zero exposed secrets).
+PeakGuard Roofing deeply integrates with Whop's developer and commerce platform:
+- **Whop Elements**: `<WhopElements>`, `<Checkout>`, `<CheckoutElement>`, and `<ExpressCheckoutElement>` (Apple Pay & Google Pay) with complete PCI-DSS Level 1 isolation, live quotes, and embedded pay flow.
+- **Card-on-File Tokenization (Setup Intents)**: Deposit checkout authorized and saved on file via Whop setup intent (`setup_future_usage: "off_session"`), with server-side retrieval (`GET /api/v1/setup-intents/:id`) confirming stored payment methods for final balance billing.
+- **Whop Leads API (`POST /api/v1/leads`)**: Validated server-side handler (`POST /api/estimate`) creating customer leads in the Whop dashboard with full custom metadata (`lead:manage` scope, honeypot anti-spam, and sliding-window rate limiting).
+- **Whop Invoices API (`POST /api/v1/invoices`)**: Secure server-side endpoint (`POST /api/invoice/final-balance`) with constant-time `x-admin-secret` authentication supporting both **Option A (Auto-charge stored method via `/invoices/:id/charge`)** and **Option B (Send manual invoice with hosted pay link via `/invoices/:id/send`)**, automatically deducting deposit credits.
+- **Whop Visitor Tracking (`whop.track`)**: Real-time custom event dispatching for `estimate_requested`, `service_viewed`, and `deposit_started`, alongside standard conversion events, paired with an in-browser debugger visible only via `?debug=1`.
+- **Whop Webhooks**: Standard Webhooks HMAC-SHA256 signature verification with 5-minute replay-window enforcement, handling `payment.succeeded`, `setup_intent.succeeded`, and `invoice.paid`.
+- **Whop Hosting Runtime & Outbound Proxy**: Server runtime (`src/server/worker.ts`) built to `dist/server/index.js` and packed into `dist/whop-build.zip` via the `@whop/cli/vite` plugin, utilizing Whop's outbound signing proxy (`WHOP_API_ORIGIN`) with zero client-exposed secrets.
 
 ---
 
@@ -30,33 +31,33 @@ PeakGuard Roofing deeply integrates with Whop's commerce and developer platform:
 
 ### 2. Install Dependencies
 ```bash
-git clone <repo-url> peakguard-roofing
+git clone https://github.com/Sulemansaqib243342/peakguard-roofing.git
 cd peakguard-roofing
 npm install
 ```
 
 ### 3. Environment Configuration
-Copy `.env.example` to `.env.local`:
+Copy `.env.example` to `.env`:
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 Configure your credentials:
 ```env
-# Optional for local test mode (injected automatically in production runtime):
+# Optional for local test mode (injected automatically in Whop production runtime):
 WHOP_API_ORIGIN=https://sandbox-api.whop.com
 WHOP_ACCOUNT_ID=biz_xxxxxxxxxxxx
 WHOP_API_KEY=your_sandbox_api_key
 
 # Required for server-side invoice & webhook security:
-WHOP_WEBHOOK_SECRET=ws_xxxxxxxxxxxx
-ADMIN_SECRET=your_secure_admin_passphrase
+ADMIN_SECRET=your_secure_admin_passphrase_here
+WHOP_WEBHOOK_SECRET=ws_your_webhook_secret_here
 ```
 
 ### 4. Run Development Server
 ```bash
 npm run dev
 # Or run with full Whop hosting environment emulation:
-whop apps dev
+npx @whop/cli apps dev
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
@@ -69,7 +70,7 @@ All business data lives in **ONE file**: [`src/site.config.ts`](src/site.config.
 Rebranding this site for another roofing or trade company requires **ZERO edits to any React component**.
 
 ### 1. Change Company Details
-Edit `siteConfig.company`:
+Edit `siteConfig.company` in [`src/site.config.ts`](src/site.config.ts):
 ```typescript
 company: {
   name: "Apex Crest Roofing",
@@ -77,8 +78,8 @@ company: {
   phone: "+15559876543",
   phoneDisplay: "(555) 987-ROOF",
   email: "dispatch@apexcrest.com",
-  license: "FL-CCC #1332091",
-  insurance: "$2,000,000 Aggregate Coverage",
+  license: "FL-CCC #1332091 (Sample License)",
+  insurance: "$2,000,000 Aggregate Coverage (Sample)",
   // ...
 }
 ```
@@ -87,22 +88,22 @@ company: {
 Edit `siteConfig.brand`:
 ```typescript
 brand: {
-  primaryColor: "#0f172a",   // Changes headers, buttons, dark themes
-  accentColor: "#f59e0b",    // Changes accents, badges, highlights
+  primaryColor: "#0f172a",   // Slate-900 (Headers, hero, nav)
+  accentColor: "#f59e0b",    // Amber-500 (Contractor gold CTA)
   // ...
 }
 ```
-All components inherit these values via CSS variables automatically.
 
 ### 3. Change Services & Pricing Plans
 Edit `siteConfig.services` and `siteConfig.whop.plans`:
 ```typescript
 whop: {
-  accountId: "biz_your_account_id",
+  websiteRoute: "your-company-route",
+  accountId: "", // Injected automatically by Whop hosting runtime
   plans: {
-    inspection: { id: "plan_your_inspection_id", price: 149, ... },
-    deposit:    { id: "plan_your_deposit_id",    price: 500, ... },
-    tuneUp:     { id: "plan_your_tuneup_id",     price: 299, ... },
+    inspection: { id: "plan_your_inspection_id", price: 149, priceDisplay: "$149", ... },
+    deposit:    { id: "plan_your_deposit_id",    price: 500, priceDisplay: "$500", ... },
+    tuneUp:     { id: "plan_your_tuneup_id",     price: 299, priceDisplay: "$299", ... },
   }
 }
 ```
@@ -122,99 +123,82 @@ To connect real checkout plans:
    - **Roof Tune-Up**: One-time payment of **$299.00 USD**.
 4. Copy each plan's ID (`plan_xxxxxxxxxxxx`) and paste it into [`src/site.config.ts`](src/site.config.ts).
 
-### Option B: Via Whop SDK / API
-```typescript
-import { WhopClient } from "@whop/sdk";
-
-const client = new WhopClient({ token: process.env.WHOP_API_KEY });
-
-// 1. Create inspection plan
-const inspection = await client.variants.create({
-  account_id: process.env.WHOP_ACCOUNT_ID,
-  product_id: "prod_xxxxxxxxxxxx",
-  initial_price: 149.0,
-  plan_type: "one_time",
-});
-
-// 2. Create deposit plan
-const deposit = await client.variants.create({
-  account_id: process.env.WHOP_ACCOUNT_ID,
-  product_id: "prod_xxxxxxxxxxxx",
-  initial_price: 500.0,
-  plan_type: "one_time",
-});
+### Option B: Via Whop CLI / API
+```bash
+npx @whop/cli products create --name "Roofing Services"
+npx @whop/cli variants create --product_id prod_xxxx --title "Roof Inspection" --initial_price 149 --billing_type one_time
+npx @whop/cli variants create --product_id prod_xxxx --title "Project Deposit" --initial_price 500 --billing_type one_time
+npx @whop/cli variants create --product_id prod_xxxx --title "Roof Tune-Up" --initial_price 299 --billing_type one_time
 ```
 
 ---
 
 ## 🚢 CLI Deployment to Whop Hosting
 
-Deploying to Whop's globally distributed Edge runtime takes 3 steps:
+Deploying to Whop's globally distributed Edge runtime served at a live **`<route>.whop.app`** URL:
 
 ### 1. Authenticate CLI
 ```bash
-whop login
+npx @whop/cli auth login
 ```
+*(Or interactive login with your business account selection).*
 
-### 2. Initialize Website (if linking to a new domain)
+### 2. Initialize Website App
 ```bash
-whop apps init --app_type website --name "PeakGuard Roofing Co." --domain peakguard-roofing
+npx @whop/cli apps init --app_type website --name "PeakGuard Roofing Co." --domain peakguard-roofing
 ```
-This claims the `peakguard-roofing.whop.site` route and writes `whop.app.json`.
+This claims your route (`peakguard-roofing.whop.app`) and writes `whop.app.json`.
 
-### 3. Set Runtime Secrets
+### 3. Set Runtime Secrets (Encrypted at rest)
 ```bash
-whop apps secrets set --secret ADMIN_SECRET="your-32-char-random-secret"
-whop apps secrets set --secret WHOP_WEBHOOK_SECRET="ws_your_webhook_secret"
+npx @whop/cli apps secrets set --secret ADMIN_SECRET="your-32-char-random-secret"
+npx @whop/cli apps secrets set --secret WHOP_WEBHOOK_SECRET="ws_your_webhook_secret"
 ```
 
 ### 4. Deploy Live
 ```bash
-# Typechecks and builds worker + static bundle, then uploads and promotes:
-whop apps deploy
+# Typechecks, builds client + server worker, packs dist/whop-build.zip, uploads and promotes:
+npx @whop/cli apps deploy
 
-# Or deploy as preview without going live immediately:
-whop apps deploy --preview
+# Or deploy as preview without promoting:
+npx @whop/cli apps deploy --preview
 ```
 
 ### 5. Inspect Live Production Logs
 ```bash
-whop apps logs app_peakguard_roofing --level info
+npx @whop/cli apps logs app_peakguard_roofing --level info
 ```
 
 ---
 
 ## 🔍 How to Verify Features
 
-### 1. Verify Leads & Estimates
+### 1. Verify Leads in Whop Dashboard
 - Fill out the estimate form on `#estimate`.
-- Submitted to `POST /api/estimate`.
-- Client and server validate fields with schema, enforce rate limits, and check honeypot.
-- Server logs lead creation to `whop apps logs` and calls Whop Leads API if key configured.
-- Diagnostic check: GET `/api/estimate` returns recent submission IDs and count.
+- Submit the form (schema validated, honeypot checked, rate-limited to 5 req/min).
+- Go to **Whop Dashboard > Leads**.
+- Verify the lead appears with the name, email, phone, street address, ZIP code, and service requested.
 
 ### 2. Verify Tracking Events
 - Open the site with `?debug=1` in the URL (e.g. `http://localhost:3000/?debug=1`).
-- The floating **Whop Pixel Debugger** toolbar appears in the bottom-right corner with a static indicator dot.
-- Click to expand and view events as they trigger: `estimate_requested`, `service_viewed`, `deposit_started`.
+- The floating **Whop Pixel Debugger** toolbar appears in the bottom-right corner with a static amber indicator.
+- Click to expand and view the 3 custom events as they fire:
+  - `estimate_requested` (upon estimate form submission)
+  - `service_viewed` (upon clicking any service card)
+  - `deposit_started` (upon clicking Project Deposit checkout)
 
 ### 3. Verify Final Balance Invoicing
-- Visit `/admin/invoicing`.
-- Enter your `ADMIN_SECRET`.
-- Test **Option A (Auto-charge)** (`mode: "auto_charge"`) by passing customer email, estimate total, deposit credit, and stored `payt_...` ID.
-- Test **Option B (Email send)** (`mode: "send_manual"`) without a card on file to send a hosted invoice link.
-- Or run the CLI test script:
-  ```bash
-  npx tsx scripts/test-invoice.ts auto_charge client@example.com 8500 payt_test_token
-  npx tsx scripts/test-invoice.ts send_manual client@example.com 8500
-  ```
+- Visit `/admin/invoicing` with your `ADMIN_SECRET`.
+- **Option A (Auto-charge)** (`mode: "auto_charge"`): Charges the customer's stored payment method (`payt_...`) off-session via `POST /invoices/:id/charge`.
+- **Option B (Send manual invoice)** (`mode: "send_manual"`): Creates the invoice and emails a hosted payment link to the customer via `POST /invoices/:id/send`.
+- View the issued invoice under **Whop Dashboard > Invoices**.
 
 ---
 
 ## 🛡️ Security Guarantees
-- **Zero Exposed Keys**: `WHOP_API_KEY` is never bundled into client JS or committed to git.
-- **Runtime Injected Authentication**: Outbound calls use Whop's internal secure proxy (`WHOP_API_ORIGIN`).
-- **Protected Admin Routes**: The invoicing endpoint rejects any request lacking a valid `x-admin-secret` header.
-- **Honeypot + Timing Anti-Spam**: Prevents automated bot submissions on the lead generation form.
-- **PCI-DSS Level 1**: All credit card processing occurs through Whop Payments iframe elements; card data never touches your application.
-
+- **Zero Exposed Keys**: `WHOP_API_KEY` is strictly server-side; never bundled in browser JS.
+- **Runtime Signed Proxy**: Outbound calls use Whop's internal secure proxy (`WHOP_API_ORIGIN`).
+- **Protected Admin Routes**: Constant-time comparison ensures timing-attack resistant authentication for invoicing.
+- **Webhooks Verification**: Cryptographic HMAC-SHA256 signature verification with 5-minute replay window check.
+- **Same-Origin CORS**: Restricts API calls to legitimate host origins.
+- **PCI-DSS Level 1**: Card details are collected exclusively in Whop's hosted iframes.

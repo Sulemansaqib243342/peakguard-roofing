@@ -118,3 +118,4 @@ export const HowItWorksSection: React.FC<HowItWorksProps> = ({ onOpenCheckout, o
     </section>
   );
 };
+

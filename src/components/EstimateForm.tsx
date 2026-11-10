@@ -119,7 +119,7 @@ export const EstimateForm: React.FC = () => {
         eventId: data.leadId,
       });
 
-      setLeadId(data.leadId || `lead_${Date.now()}`);
+      setLeadId(data.whopLeadId || data.leadId || "");
       setSubmitSuccess(true);
     } catch (err: any) {
       console.error("[Estimate Form Submit Error]", err);

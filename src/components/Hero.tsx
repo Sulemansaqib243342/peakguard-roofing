@@ -80,7 +80,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
                 }}
                 className="px-5 py-3.5 rounded-xl text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 transition-all flex items-center justify-center gap-2 text-center focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:outline-none"
               >
-                <span>Book $149 Inspection</span>
+                <span>Book {siteConfig.whop.plans.inspection.priceDisplay} Inspection</span>
               </button>
             </div>
 
@@ -92,8 +92,12 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
                     <Star key={i} className="w-3.5 h-3.5 fill-amber-400" />
                   ))}
                 </div>
-                <span className="font-semibold text-slate-200">4.9 / 5.0</span>
-                <span className="text-slate-400">(Sample Reviews)</span>
+                <span className="font-semibold text-slate-200">
+                  {siteConfig.company.rating.score}
+                </span>
+                <span className="text-slate-400">
+                  ({siteConfig.company.rating.reviewCount})
+                </span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Award className="w-3.5 h-3.5 text-amber-400" />
@@ -143,7 +147,9 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
                     <p className="text-xs text-slate-400">21-point drone scan + credited toward repairs</p>
                   </div>
                   <div className="text-right pl-3 shrink-0">
-                    <div className="text-base font-bold text-amber-400">$149</div>
+                    <div className="text-base font-bold text-amber-400">
+                      {siteConfig.whop.plans.inspection.priceDisplay}
+                    </div>
                     <span className="text-sm font-medium text-slate-300 group-hover:text-amber-300 group-hover:underline">
                       Book &rarr;
                     </span>
@@ -159,16 +165,18 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-white group-hover:text-amber-400 transition-colors">
-                        Project Deposit
+                        {siteConfig.whop.plans.deposit.name}
                       </span>
                       <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono">
                         CARD SAVED
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Locks date; card saved for final invoice</p>
+                    <p className="text-xs text-slate-400">{siteConfig.whop.plans.deposit.description}</p>
                   </div>
                   <div className="text-right pl-3 shrink-0">
-                    <div className="text-base font-bold text-amber-400">$500</div>
+                    <div className="text-base font-bold text-amber-400">
+                      {siteConfig.whop.plans.deposit.priceDisplay}
+                    </div>
                     <span className="text-sm font-medium text-slate-300 group-hover:text-amber-300 group-hover:underline">
                       Reserve &rarr;
                     </span>
@@ -184,13 +192,15 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm text-white group-hover:text-amber-400 transition-colors">
-                        Roof Tune-Up Flat Rate
+                        {siteConfig.whop.plans.tuneUp.name}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Reseal boots & flashing + up to 5 shingles</p>
+                    <p className="text-xs text-slate-400">{siteConfig.whop.plans.tuneUp.description}</p>
                   </div>
                   <div className="text-right pl-3 shrink-0">
-                    <div className="text-base font-bold text-amber-400">$299</div>
+                    <div className="text-base font-bold text-amber-400">
+                      {siteConfig.whop.plans.tuneUp.priceDisplay}
+                    </div>
                     <span className="text-sm font-medium text-slate-300 group-hover:text-amber-300 group-hover:underline">
                       Book &rarr;
                     </span>
