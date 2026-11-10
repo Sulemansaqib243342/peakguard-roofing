@@ -45,6 +45,10 @@ jobs:
         env:
           WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
         run: |
+          if [ -z "$WHOP_API_KEY" ]; then
+            echo "::error::WHOP_API_KEY secret is missing or empty in GitHub Secrets!"
+            exit 1
+          fi
           npx @whop/cli login --method api-key --api-key "$WHOP_API_KEY"
           npx @whop/cli apps deploy \
             --app app_cwcaMIErHBTI4d \
