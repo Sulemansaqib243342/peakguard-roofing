@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Local environment secrets — NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Whop app config (commit whop.app.json — it has no secrets)
+# whop.app.json  ← DO commit this file
+
+# TypeScript
+*.tsbuildinfo
+
