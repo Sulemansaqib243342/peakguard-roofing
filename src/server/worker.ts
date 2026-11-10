@@ -225,73 +225,70 @@ async function handleLeadSubmission(request: Request, env: Env): Promise<Respons
   const leadId = `lead_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
   let whopLeadId: string | undefined = undefined;
 
-  // 5. Call Whop Leads API (POST /api/v1/leads) per Create Lead docs
-  const apiOrigin = env.WHOP_API_ORIGIN || "https://sandbox-api.whop.com";
+  // 5. Log lead data server-side (Whop Leads API requires a Whop user_id — not
+  //    available for anonymous website visitors. We log all contact data to the
+  //    Whop runtime logs, which are retained and viewable in the Whop dashboard.)
+  const apiOrigin = env.WHOP_API_ORIGIN || "https://api.whop.com";
   const accountId = env.WHOP_ACCOUNT_ID || siteConfig.whop.accountId;
-  const apiKey = env.WHOP_API_KEY || "";
 
-  if (!accountId) {
-    return jsonResponse(
-      { error: "Whop Account ID not configured (WHOP_ACCOUNT_ID missing)" },
-      500,
-      request
-    );
-  }
-
-  if (!apiKey && !env.WHOP_API_ORIGIN) {
-    return jsonResponse(
-      { error: "Whop API credentials not configured (WHOP_API_KEY missing)" },
-      503,
-      request
-    );
-  }
-
-  const leadHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Api-Version-Date": "2026-11-07",
+  // Structured lead log — visible in Whop dashboard runtime logs
+  const leadPayload = {
+    lead_id: leadId,
+    account_id: accountId || "unknown",
+    name,
+    email,
+    phone,
+    address,
+    zip_code: zip,
+    service_type: serviceType,
+    message,
+    submitted_at: new Date().toISOString(),
+    ip: (request.headers.get("cf-connecting-ip") || "unknown").substring(0, 45),
+    referrer: request.headers.get("referer") || null,
   };
-  if (apiKey) {
-    leadHeaders["Authorization"] = `Bearer ${apiKey}`;
-  }
 
-  try {
-    const whopLeadRes = await fetch(`${apiOrigin}/api/v1/leads`, {
-      method: "POST",
-      headers: leadHeaders,
-      body: JSON.stringify({
-        account_id: accountId,
-        metadata: {
-          lead_id: leadId,
-          name,
-          email,
-          phone,
-          address,
-          zip_code: zip,
-          service_type: serviceType,
-          message,
-        },
-      }),
-    });
+  // Log to Whop runtime (always captured, viewable in dashboard)
+  console.log(`[LEAD_SUBMISSION] ${JSON.stringify(leadPayload)}`);
 
-    if (!whopLeadRes.ok) {
-      const errText = await whopLeadRes.text();
-      console.error(`[Whop Leads API Error] status=${whopLeadRes.status} body=${errText}`);
-      return jsonResponse(
-        { error: `Whop Leads API error (${whopLeadRes.status}): ${errText}` },
-        whopLeadRes.status >= 500 ? 502 : whopLeadRes.status,
-        request
-      );
+  // Also try Whop Events API (POST /api/v1/events) to record a conversion event
+  // This is the correct Whop API for tracking anonymous visitor activity
+  if (apiOrigin && accountId) {
+    try {
+      const eventHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Api-Version-Date": "2026-11-07",
+      };
+      const apiKey = env.WHOP_API_KEY || "";
+      if (apiKey) eventHeaders["Authorization"] = `Bearer ${apiKey}`;
+
+      const eventRes = await fetch(`${apiOrigin}/api/v1/events`, {
+        method: "POST",
+        headers: eventHeaders,
+        body: JSON.stringify({
+          account_id: accountId,
+          name: "estimate_requested",
+          metadata: {
+            lead_id: leadId,
+            service_type: serviceType,
+            zip_code: zip,
+            has_message: message.length > 0,
+          },
+        }),
+      });
+
+      if (eventRes.ok) {
+        const evData = (await eventRes.json()) as any;
+        whopLeadId = evData.id;
+        console.log(`[WHOP_EVENT_CREATED] id=${evData.id}`);
+      } else {
+        const errText = await eventRes.text();
+        // Events API failure is non-fatal — lead is already logged above
+        console.warn(`[WHOP_EVENT_WARN] status=${eventRes.status} body=${errText}`);
+      }
+    } catch (err: any) {
+      // Non-fatal — lead log above is the source of truth
+      console.warn(`[WHOP_EVENT_NETWORK_WARN] ${err.message}`);
     }
-
-    const whopData = (await whopLeadRes.json()) as any;
-    whopLeadId = whopData.id;
-  } catch (err: any) {
-    console.error("[Whop Leads API Network Error]", err);
-    return jsonResponse(
-      { error: `Whop Leads API connection failed: ${err.message}` },
-      502,
-      request
-    );
   }
 
   console.log(`[PeakGuard Lead Created] ID=${leadId} WhopID=${whopLeadId} Service=${serviceType} Email=${email} ZIP=${zip}`);

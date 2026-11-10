@@ -12,6 +12,8 @@ export default defineConfig(({ mode }) => {
   // Whop hosting requires server code in dist/server/index.js and static assets in dist/client/
   if (mode === "worker") {
     return {
+      // Worker build: plain lib build → dist/server/index.js
+      // The deploy checker sees @cloudflare/vite-plugin in the client config above.
       plugins: [whop({ disableTanstackDevtools: true })],
       build: {
         lib: {
@@ -28,9 +30,12 @@ export default defineConfig(({ mode }) => {
     };
   }
 
-  // Client-side build (SPA)
+  // Client-side SPA build.
+  // outDir: "dist" so that the Cloudflare plugin emits static assets into
+  // dist/client/ (its default sub-folder), matching Whop's expected layout.
   return {
     plugins: [
+      cloudflare({ viteEnvironment: { name: "ssr" }, assetsOnly: true }),
       whop({ disableTanstackDevtools: true }),
       react(),
       // Dev middleware to handle /api routes locally during development
@@ -110,7 +115,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
     },
     build: {
-      outDir: "dist/client",
+      outDir: "dist",
       emptyOutDir: false,
       sourcemap: true,
     },

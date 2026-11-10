@@ -4,3 +4,4 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server/worker.ts"
 }
+
