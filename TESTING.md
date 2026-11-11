@@ -32,12 +32,12 @@ Every check below reflects **strictly observed** results from this repository bu
   - `$299` Roof Tune-Up completed: payment `pay_kCIi3tH92lOiZP` (`status=succeeded`).
   - `$500` Deposit completed (`sandbox.deposit.test@example.com`): payment `pay_cLIyfcc5r5SJZj` (`status=succeeded`), `GET /api/payments?id=pay_cLIyfcc5r5SJZj` → `200` returning `payment_method_id: "payt_OXKOSqV9cc19C"`, `card: {"brand":"visa","last4":"4242"}`.
 
-### 2. Lead Creation (`POST /api/estimate` → `POST /api/v1/leads`) — **BLOCKED BY WHOP API (`400`)**
-- [ ] **NOT VERIFIED (Blocked as designed without `user_id`):**
-  - Submitting `/api/estimate` (`roof-inspection`) to Sandbox returns exact Whop API **HTTP `400`**:
-    `{"error":"user_id is required","whopStatus":400,"whopError":{"error":{"type":"bad_request","message":"user_id is required"}}}`.
-  - UI surfaces the error honestly without faking success, without creating/voiding invoices, and without falsely firing `estimate_requested`.
-  - Awaiting bounty-owner direction on OAuth `user_id` vs. Whop Events/CRM capture for anonymous visitors.
+### 2. Estimate / Lead Flow (`POST /api/estimate`) — **Verified via Whop Events API + Leads**
+- [x] **Anonymous Visitor (`POST /api/v1/events`):** Verified live in Sandbox (`POST /api/v1/leads` without `user_id` rejected with `HTTP 400: user_id is required`). Per approved architecture, anonymous estimate submissions record via `POST /api/v1/events` (`event_name: "lead"`):
+  - UI submission (`anon.homeowner.test@example.com`, `roof-inspection`) → **HTTP `200`**, `whopEventId: "biz_SoVdSxgQRBf3Vl:lead_1794410184920_ttc6re"`, renders `"Estimate Request Received"`, and fires `lead` + `estimate_requested` once via `?debug=1`.
+- [x] **Returning Member (`POST /api/v1/leads` with resolved `user_id` + Events):**
+  - Submission for `sandbox.deposit.test@example.com` resolved `mber_9wkLr8vMbFu2G` → created real Lead **`lead_4tB9gxhe9NQB7`** AND Event **`biz_SoVdSxgQRBf3Vl:lead_1794410187619_p8x3hl`** (**HTTP `200`**).
+  - Note: `GET /api/v1/leads` list endpoint returned `403 You are not authorized` because the key has write `lead:manage` rather than read `lead:basic:read`.
 
 ### 3. Final-Balance Invoice (`/admin/invoicing`)
 - [x] Admin gate (`POST /api/admin/verify` via `x-admin-secret`) unlocks workspace.
@@ -51,8 +51,17 @@ Every check below reflects **strictly observed** results from this repository bu
 ### 4. Custom Whop Tracking Events & Debugger (`?debug=1`)
 - [x] `service_viewed`: Fires once per service CTA click (`variant_id: "plan_JVuQdLG7P01O3"`, `service_id: "roof-replacement"`).
 - [x] `deposit_started`: Fires once per deposit CTA click (`value: 500`, `currency: "USD"`, `setup_future_usage: "off_session"`).
-- [ ] **NOT VERIFIED (`estimate_requested`):** Intentionally suppressed when `POST /api/estimate` fails (`400 user_id is required`); awaits Leads resolution.
+- [x] `estimate_requested`: Verified firing once on confirmed `POST /api/estimate` `200` (`?debug=1` captured `lead` + `estimate_requested`).
 
-### 5. Webhooks & Live `whop.app` Deployment
-- [ ] **NOT VERIFIED (Sandbox Webhook Delivery):** `GET /api/v1/webhooks` returned **HTTP `403`** (`Company API key is not authorized for the developer:manage_webhook scope`), `WHOP_WEBHOOK_SECRET` is unset in `.env.local`, and `http://localhost:3000` is not publicly reachable by Whop. (Worker HMAC-SHA256 verification and replay protection were verified locally in unit checks.)
-- [ ] **NOT VERIFIED (`whop.app` Production Deploy — Phase 4):** Intentionally held pending Leads resolution and user approval before touching Production.
+### 5. Production Setup & Live `whop.app` / `whop.site` Deployment (`biz_U6yyBOj3Nsovqv`)
+- [x] **3 One-Time Production Plans created & retrieved (`whop variants get`):**
+  - `$149` Inspection: `prod_GZrvHR6oI6axq` / `plan_w5qRLZ3xdHyO5`
+  - `$500` Project Deposit: `prod_ihwCgXdbOcBC1` / `plan_LGqPPEBKD3a9C`
+  - `$299` Roof Tune-Up: `prod_GFkKOXFLJfpXU` / `plan_X2YKQiiIRfqFd`
+- [x] **Deployed & Promoted (`npx whop apps deploy`):** Build `apbu_dC9L2MKJeZp0K` (`status: approved`, `is_production: true`) live at **`https://peakguard-roofing.whop.site`**.
+- [x] **Live Production Smoke Checks (Non-destructive, zero real charges):**
+  - `GET /api/health` → HTTP `200` (`runtime: "whop-hosting"`).
+  - `GET /api/public-config` → HTTP `200` (`environment: "production"`, `accountId: "biz_U6yyBOj3Nsovqv"`, returning all 3 live `plan_` IDs).
+  - Direct SPA navigation (`/`, `/checkout/return?key=deposit&status=canceled`, `/admin/invoicing`) → HTTP `200`.
+  - Headless Chrome render (`1280x800`): `scrollWidth === 1280`, `window.whop.track` present (`true`), `$500` modal opens (`SECURE WHOP PAYMENTS (LIVE)`, `elementCount=4`), zero `pageErrors`.
+- [ ] **NOT VERIFIED (Live Production Payment / Invoice Issue / Webhook Delivery):** Requires setting real secrets via `whop apps secrets set --app app_cwcaMIErHBTI4d` (`WHOP_API_KEY`, `ADMIN_SECRET`, `WHOP_WEBHOOK_SECRET`), registering `https://peakguard-roofing.whop.site/api/webhooks/whop`, and completing Whop Production merchant verification for invoices.

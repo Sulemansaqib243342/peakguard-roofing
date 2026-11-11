@@ -26,10 +26,11 @@ All checkout surfaces run inside `<WhopElements elements={loadWhop()} environmen
 - `POST /api/webhooks/whop` verifies Standard Webhooks HMAC-SHA256 signatures (`webhook-id`, `webhook-timestamp`, `webhook-signature` against `WHOP_WEBHOOK_SECRET`), enforces a **5-minute (300s) replay window** and duplicate-ID guard, and caches `payment.succeeded` / `setup_intent.succeeded` method IDs in memory.
 - Without KV/D1, `/admin/invoicing` queries Whop's authoritative server APIs (`GET /api/v1/members?account_id=...&query=...` and `GET /api/v1/payment_methods?member_id=...`) via `GET /api/admin/customer-lookup` to show the matched customer and saved card (**brand + last4** only).
 
-### 3. Estimate Request / Whop Leads (`POST /api/estimate` & `POST /api/leads`)
+### 3. Estimate Request / Whop Events & Leads (`POST /api/estimate` & `POST /api/leads`)
 - Enforces IP rate limiting (5 requests/min), hidden honeypot field, 1.5s time-to-fill anti-bot check, and strict input validation.
-- Calls `POST /api/v1/leads` (`account_id`, `referrer`, `metadata`) using `WHOP_API_KEY`.
-- If Whop rejects anonymous lead creation (for example if a Whop API validation requires `user_id`), the server returns an honest HTTP error to the form instead of faking success or creating/voiding hidden invoices.
+- Checks `GET /api/v1/members?account_id=...&query={email}`: if an existing Whop member with a `user_id` matches the email, creates a **Whop Lead** via `POST /api/v1/leads`.
+- For all visitors (anonymous and returning), records a **`lead` event** via `POST /api/v1/events` (`event_name: "lead"`, customer contact info inside `user: { email, name, first_name, last_name, phone, postal_code }`) and optionally forwards to `CRM_WEBHOOK_URL` if configured.
+- Whop's `POST /api/v1/leads` requires a Whop `user_id`; using Whop Events (`POST /api/v1/events`) handles anonymous visitors without creating/voiding invoices or faking success (returns an honest error if recording fails).
 
 ### 4. Final-Balance Invoicing (`/admin/invoicing` -> `POST /api/invoice/final-balance`)
 - Protected by constant-time `x-admin-secret` verification against `ADMIN_SECRET` (`/api/admin/verify` + all `/api/admin/*` and `/api/invoice/*` routes).
@@ -70,7 +71,7 @@ Minimum scopes needed on your Whop Company API key (`WHOP_API_KEY`):
 - `payment:basic:read`, `payment:charge`
 - `invoice:create`, `invoice:update`
 - `member:basic:read`, `member:email:read`, `member:payment_methods:read`
-- `lead:manage`
+- `lead:manage`, `event:create`
 
 Run locally:
 ```bash

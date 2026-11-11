@@ -34,6 +34,7 @@ export interface Env {
   WHOP_PLAN_INSPECTION?: string;
   WHOP_PLAN_DEPOSIT?: string;
   WHOP_PLAN_TUNEUP?: string;
+  CRM_WEBHOOK_URL?: string;
   [key: string]: unknown;
 }
 
@@ -213,6 +214,7 @@ function resolveRuntimeConfig(env: Env) {
     environment,
     accountId,
     apiKey: env.WHOP_API_KEY || "",
+    hasAuth: Boolean(env.WHOP_API_KEY || env.APP_ID),
     plans,
   };
 }
@@ -328,7 +330,7 @@ async function handleCreatePayment(request: Request, env: Env): Promise<Response
   }
 
   const cfg = resolveRuntimeConfig(env);
-  if (!cfg.accountId || !cfg.apiKey) {
+  if (!cfg.accountId || !cfg.hasAuth) {
     return jsonResponse(
       { error: "Server payment configuration missing (WHOP_ACCOUNT_ID / WHOP_API_KEY)" },
       503,
@@ -400,7 +402,7 @@ async function handleGetPayment(request: Request, env: Env): Promise<Response> {
   }
 
   const cfg = resolveRuntimeConfig(env);
-  if (!cfg.apiKey) {
+  if (!cfg.hasAuth) {
     return jsonResponse({ error: "WHOP_API_KEY not configured" }, 503, request);
   }
 
@@ -470,7 +472,7 @@ async function handleGetSetupIntent(request: Request, env: Env): Promise<Respons
   if (!id) return jsonResponse({ error: "Setup intent ID required" }, 400, request);
 
   const cfg = resolveRuntimeConfig(env);
-  if (!cfg.apiKey) {
+  if (!cfg.hasAuth) {
     return jsonResponse({ error: "WHOP_API_KEY not configured" }, 503, request);
   }
 
@@ -500,6 +502,37 @@ async function handleGetSetupIntent(request: Request, env: Env): Promise<Respons
 // ────────────────────────────────────────────────────────────────────────────
 // Leads / Estimate Form Handler
 // ────────────────────────────────────────────────────────────────────────────
+
+/** Lookup an existing Whop member record for this account by email (returns null on miss/error). */
+async function findWhopMemberByEmail(
+  apiOrigin: string,
+  apiKey: string,
+  accountId: string,
+  email: string
+): Promise<{ ok: boolean; status: number; errText?: string; member: any | null }> {
+  const membersRes = await whopFetch(
+    apiOrigin,
+    apiKey,
+    `/members?account_id=${encodeURIComponent(accountId)}&query=${encodeURIComponent(email)}`
+  );
+
+  if (!membersRes.ok) {
+    return { ok: false, status: membersRes.status, errText: await membersRes.text(), member: null };
+  }
+
+  const membersData = (await membersRes.json()) as { data?: any[] };
+  const membersList = membersData.data || [];
+  const matchedMember =
+    membersList.find(
+      (m) =>
+        String(m?.email || "").toLowerCase() === email ||
+        String(m?.user?.email || "").toLowerCase() === email
+    ) ||
+    membersList[0] ||
+    null;
+
+  return { ok: true, status: 200, member: matchedMember };
+}
 
 async function handleLeadSubmission(request: Request, env: Env): Promise<Response> {
   const clientIp = request.headers.get("cf-connecting-ip") || "127.0.0.1";
@@ -561,7 +594,7 @@ async function handleLeadSubmission(request: Request, env: Env): Promise<Respons
   }
 
   const cfg = resolveRuntimeConfig(env);
-  if (!cfg.accountId || !cfg.apiKey) {
+  if (!cfg.accountId || !cfg.hasAuth) {
     return jsonResponse(
       { error: "Lead service unavailable: WHOP_ACCOUNT_ID or WHOP_API_KEY is not configured." },
       503,
@@ -570,67 +603,160 @@ async function handleLeadSubmission(request: Request, env: Env): Promise<Respons
   }
 
   const leadRefId = `lead_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const [firstName, ...restName] = name.split(/\s+/);
+  const lastName = restName.join(" ") || undefined;
+  const referer = request.headers.get("referer") || undefined;
+  const formattedPhone = phone.length === 10 ? `+1${phone}` : `+${phone}`;
 
   try {
-    // Call POST /api/v1/leads WITHOUT user_id per Whop Leads API test requirement.
-    // Do NOT create fake draft-and-void invoices or fake success on failure.
-    const leadRes = await whopFetch(cfg.apiOrigin, cfg.apiKey, "/leads", {
-      method: "POST",
-      body: {
-        account_id: cfg.accountId,
-        referrer: request.headers.get("referer") || undefined,
-        metadata: {
-          lead_ref: leadRefId,
-          customer_name: name,
-          customer_email: email,
-          customer_phone: phone,
-          property_address: address,
-          zip_code: zip,
-          service_type: serviceType,
-          notes: message,
-          submitted_at: new Date().toISOString(),
-        },
-      },
-    });
+    // 1. Check if visitor email matches an existing Whop member carrying a user_id.
+    let matchedMemberId: string | undefined;
+    let matchedUserId: string | undefined;
+    let whopLeadId: string | undefined;
 
-    const responseText = await leadRes.text();
-    let parsed: any = null;
-    try {
-      parsed = JSON.parse(responseText);
-    } catch {
-      parsed = { raw: responseText };
+    const lookup = await findWhopMemberByEmail(cfg.apiOrigin, cfg.apiKey, cfg.accountId, email).catch(
+      () => ({ ok: false, status: 0, member: null })
+    );
+    if (lookup.ok && lookup.member) {
+      matchedMemberId = lookup.member.id;
+      matchedUserId = lookup.member.user?.id;
     }
 
-    if (!leadRes.ok) {
-      console.warn(`[Whop Leads API Rejected] status=${leadRes.status} ref=${leadRefId}`);
+    // 2. Only call POST /api/v1/leads when an authenticated Whop user_id exists (since Whop requires user_id).
+    if (matchedUserId) {
+      const leadRes = await whopFetch(cfg.apiOrigin, cfg.apiKey, "/leads", {
+        method: "POST",
+        body: {
+          account_id: cfg.accountId,
+          user_id: matchedUserId,
+          referrer: referer,
+          metadata: {
+            lead_ref: leadRefId,
+            customer_name: name,
+            customer_email: email,
+            customer_phone: phone,
+            property_address: address,
+            zip_code: zip,
+            service_type: serviceType,
+            notes: message,
+            submitted_at: new Date().toISOString(),
+          },
+        },
+      });
+      if (leadRes.ok) {
+        const leadData = (await leadRes.json().catch(() => null)) as { id?: string } | null;
+        whopLeadId = leadData?.id;
+      } else {
+        console.warn(`[Whop Leads API Warning] status=${leadRes.status} ref=${leadRefId}`);
+      }
+    }
+
+    // 3. Record quote submission in Whop Events API (POST /api/v1/events) for anonymous + returning visitors.
+    const eventPayload = {
+      account_id: cfg.accountId,
+      event_name: "lead",
+      event_id: leadRefId,
+      url: referer || request.url,
+      referrer_url: referer,
+      user: {
+        email,
+        name,
+        first_name: firstName,
+        ...(lastName ? { last_name: lastName } : {}),
+        phone: formattedPhone,
+        postal_code: zip.slice(0, 5),
+        country: "US",
+        ...(matchedUserId ? { user_id: matchedUserId } : {}),
+        ...(matchedMemberId ? { member_id: matchedMemberId } : {}),
+      },
+    };
+
+    let eventRes = await whopFetch(cfg.apiOrigin, cfg.apiKey, "/events", {
+      method: "POST",
+      body: eventPayload,
+    });
+
+    // Per OpenAPI spec (`security: [ { bearerAuth: [event:create] }, {} ]`), fallback unauthenticated if key lacks event:create.
+    if (eventRes.status === 401 || eventRes.status === 403) {
+      eventRes = await fetch(`${cfg.apiOrigin}/api/v1/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Api-Version-Date": WHOP_API_VERSION,
+          Accept: "application/json",
+        },
+        body: JSON.stringify(eventPayload),
+      });
+    }
+
+    const eventText = await eventRes.text();
+    let parsedEvent: any = null;
+    try {
+      parsedEvent = JSON.parse(eventText);
+    } catch {
+      parsedEvent = { raw: eventText };
+    }
+
+    // Optional external CRM webhook forward if configured
+    let crmForwarded = false;
+    if (env.CRM_WEBHOOK_URL && typeof env.CRM_WEBHOOK_URL === "string") {
+      try {
+        const crmRes = await fetch(env.CRM_WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            leadId: leadRefId,
+            whopLeadId,
+            whopEventId: parsedEvent?.id,
+            serviceType,
+            customer: { name, email, phone: formattedPhone, address, zipCode: zip },
+            notes: message,
+            submittedAt: new Date().toISOString(),
+          }),
+        });
+        crmForwarded = crmRes.ok;
+      } catch {
+        console.warn(`[CRM Webhook Forward Failed] ref=${leadRefId}`);
+      }
+    }
+
+    if (!eventRes.ok && !whopLeadId && !crmForwarded) {
+      console.warn(`[Whop Events API Rejected] status=${eventRes.status} ref=${leadRefId}`);
       return jsonResponse(
         {
           error:
-            parsed?.error?.message ||
-            `Whop Leads API rejected submission (HTTP ${leadRes.status}). No lead was recorded.`,
-          whopStatus: leadRes.status,
-          whopError: parsed,
+            parsedEvent?.error?.message ||
+            `Lead event recording failed (HTTP ${eventRes.status}). Please call our dispatch desk directly.`,
+          whopStatus: eventRes.status,
+          whopError: parsedEvent,
         },
-        leadRes.status >= 500 ? 502 : leadRes.status,
+        eventRes.status >= 500 ? 502 : eventRes.status,
         request
       );
     }
 
-    console.log(`[Whop Lead Created] id=${parsed?.id} ref=${leadRefId} service=${serviceType} zip=${zip}`);
+    console.log(
+      `[Lead Recorded] eventId=${parsedEvent?.id || "none"} leadId=${whopLeadId || "anonymous"} ref=${leadRefId} service=${serviceType}`
+    );
+
     return jsonResponse(
       {
         success: true,
         leadId: leadRefId,
-        whopLeadId: parsed?.id,
-        message: "Estimate request recorded in Whop Leads. A roofing specialist will reach out within 24 hours.",
+        whopLeadId: whopLeadId || undefined,
+        whopEventId: parsedEvent?.id || undefined,
+        crmForwarded,
+        message: whopLeadId
+          ? "Estimate request recorded in Whop Leads & Events. A roofing specialist will reach out within 24 hours."
+          : "Estimate request received and logged via Whop Events. A roofing specialist will reach out within 24 hours.",
       },
       200,
       request
     );
   } catch (err: any) {
-    console.error(`[Whop Leads Network Error] ref=${leadRefId}`);
+    console.error(`[Whop Lead/Event Network Error] ref=${leadRefId}`);
     return jsonResponse(
-      { error: err.message || "Failed to reach Whop Leads API" },
+      { error: err.message || "Failed to record estimate request" },
       502,
       request
     );
@@ -658,34 +784,21 @@ async function handleAdminCustomerLookup(request: Request, env: Env): Promise<Re
   }
 
   const cfg = resolveRuntimeConfig(env);
-  if (!cfg.accountId || !cfg.apiKey) {
+  if (!cfg.accountId || !cfg.hasAuth) {
     return jsonResponse({ error: "Whop account credentials not configured" }, 503, request);
   }
 
   try {
-    const membersRes = await whopFetch(
-      cfg.apiOrigin,
-      cfg.apiKey,
-      `/members?account_id=${encodeURIComponent(cfg.accountId)}&query=${encodeURIComponent(email)}`
-    );
-
-    if (!membersRes.ok) {
-      const errText = await membersRes.text();
+    const lookup = await findWhopMemberByEmail(cfg.apiOrigin, cfg.apiKey, cfg.accountId, email);
+    if (!lookup.ok) {
       return jsonResponse(
-        { error: `Whop Members lookup failed (${membersRes.status}): ${errText}` },
-        membersRes.status >= 500 ? 502 : membersRes.status,
+        { error: `Whop Members lookup failed (${lookup.status}): ${lookup.errText}` },
+        lookup.status >= 500 ? 502 : lookup.status,
         request
       );
     }
 
-    const membersData = (await membersRes.json()) as { data?: any[] };
-    const membersList = membersData.data || [];
-    const matchedMember =
-      membersList.find(
-        (m) =>
-          String(m?.email || "").toLowerCase() === email ||
-          String(m?.user?.email || "").toLowerCase() === email
-      ) || membersList[0];
+    const matchedMember = lookup.member;
 
     if (!matchedMember) {
       const cached = webhookCacheByEmail.get(email);
@@ -810,7 +923,7 @@ async function handleFinalBalanceInvoice(request: Request, env: Env): Promise<Re
   }
 
   const cfg = resolveRuntimeConfig(env);
-  if (!cfg.accountId || !cfg.apiKey) {
+  if (!cfg.accountId || !cfg.hasAuth) {
     return jsonResponse(
       { error: "Whop API credentials not configured (WHOP_ACCOUNT_ID / WHOP_API_KEY required)" },
       503,

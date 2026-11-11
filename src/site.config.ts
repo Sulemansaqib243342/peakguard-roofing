@@ -223,9 +223,9 @@ export const siteConfig: SiteConfig = {
       production: {
         accountId: viteEnv.VITE_WHOP_PROD_ACCOUNT_ID || "biz_U6yyBOj3Nsovqv",
         plans: {
-          inspection: viteEnv.VITE_WHOP_PROD_PLAN_INSPECTION || "plan_PROD_INSPECTION_149",
-          deposit: viteEnv.VITE_WHOP_PROD_PLAN_DEPOSIT || "plan_PROD_DEPOSIT_500",
-          tuneUp: viteEnv.VITE_WHOP_PROD_PLAN_TUNEUP || "plan_PROD_TUNEUP_299",
+          inspection: viteEnv.VITE_WHOP_PROD_PLAN_INSPECTION || "plan_w5qRLZ3xdHyO5",
+          deposit: viteEnv.VITE_WHOP_PROD_PLAN_DEPOSIT || "plan_LGqPPEBKD3a9C",
+          tuneUp: viteEnv.VITE_WHOP_PROD_PLAN_TUNEUP || "plan_X2YKQiiIRfqFd",
         },
       },
     };
