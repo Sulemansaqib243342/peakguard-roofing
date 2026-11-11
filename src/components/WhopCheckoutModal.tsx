@@ -5,7 +5,6 @@ import {
   WhopElements,
   Checkout,
   CheckoutElement,
-  ExpressCheckoutElement,
 } from "@whop/elements-react";
 import { loadWhop } from "@whop/elements";
 
@@ -37,6 +36,15 @@ export const WhopCheckoutModal: React.FC<WhopCheckoutModalProps> = ({
       console.warn("[Whop Elements Init Warning]", err);
     }
   }, [isOpen]);
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   if (!isOpen) return null;
 
@@ -119,33 +127,8 @@ export const WhopCheckoutModal: React.FC<WhopCheckoutModalProps> = ({
                   }
                 }}
               >
-                {/* 1. Express Checkout (Apple Pay & Google Pay) */}
-                <div className="space-y-2">
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Express Checkout
-                  </div>
-                  <div className="rounded-xl border border-slate-200 p-2 bg-slate-50">
-                    <ExpressCheckoutElement
-                      layout="horizontal"
-                      wallets={["apple_pay", "google_pay"]}
-                    />
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="relative my-2">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-white px-3 text-slate-400 font-semibold">Or card payment</span>
-                  </div>
-                </div>
-
-                {/* 2. Full Hosted Checkout Surface (Includes Card inputs, live pricing, promo codes, branding & pay button) */}
-                <div className="space-y-2">
-                  <CheckoutElement />
-                </div>
+                {/* Unified Whop Checkout Surface (Includes Apple Pay, Google Pay, Card fields, & secure Pay button) */}
+                <CheckoutElement />
               </Checkout>
             </WhopElements>
           ) : (

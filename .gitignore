@@ -34,3 +34,9 @@ npm-debug.log*
 # Local downloaded reference docs
 whop_docs/
 
+# Demo videos (large binary files)
+demo-videos/
+
+# Debug/test scripts
+scripts/test-*.cjs
+
