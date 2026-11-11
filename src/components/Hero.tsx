@@ -53,7 +53,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenEstimate, onOpenCheckout }) =>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Financing Available at Checkout</span>
+                <span>Financing Options Appear at Checkout</span>
               </div>
             </div>
 

@@ -19,6 +19,7 @@ export default function CheckoutReturnPage() {
   const rawStatus = params.get("status");
   const paymentId = params.get("payment") || params.get("payment_id");
   const setupIntentId = params.get("setup_intent_id") || params.get("setup");
+  const clientSecret = params.get("client_secret");
   const planKey = params.get("key") as keyof typeof siteConfig.whop.plans | null;
   const plan = (planKey && siteConfig.whop.plans[planKey]) || siteConfig.whop.plans.deposit;
 
@@ -30,44 +31,67 @@ export default function CheckoutReturnPage() {
   const isCanceled = rawStatus === "canceled";
   const isFailed = rawStatus === "failed";
 
-  // Setup intent verification state (retrieved from backend if setupIntentId exists)
-  const [setupDetails, setSetupDetails] = useState<{
+  // Payment / Setup verification state (retrieved from backend)
+  const [savedMethodDetails, setSavedMethodDetails] = useState<{
     status?: string;
     paymentMethodId?: string;
     cardBrand?: string;
     cardLast4?: string;
   } | null>(null);
-  const [verifyingSetup, setVerifyingSetup] = useState<boolean>(Boolean(setupIntentId));
+  const [verifyingSavedMethod, setVerifyingSavedMethod] = useState<boolean>(
+    Boolean(setupIntentId || (paymentId && planKey === "deposit"))
+  );
 
   useEffect(() => {
-    if (!setupIntentId) {
-      setVerifyingSetup(false);
-      return;
-    }
-
     let isMounted = true;
-    fetch(`/api/setup-intents?id=${encodeURIComponent(setupIntentId)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!isMounted || !data) return;
-        setSetupDetails({
-          status: data.status,
-          paymentMethodId: data.payment_method_id,
-          cardBrand: data.payment_instrument?.brand,
-          cardLast4: data.payment_instrument?.last4,
+
+    if (setupIntentId) {
+      fetch(`/api/setup-intents?id=${encodeURIComponent(setupIntentId)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!isMounted || !data) return;
+          setSavedMethodDetails({
+            status: data.status,
+            paymentMethodId: data.payment_method_id,
+            cardBrand: data.payment_instrument?.card?.brand || data.payment_instrument?.brand,
+            cardLast4: data.payment_instrument?.card?.last4 || data.payment_instrument?.last4,
+          });
+        })
+        .catch((err) => {
+          console.warn("[Setup Intent Verification]", err);
+        })
+        .finally(() => {
+          if (isMounted) setVerifyingSavedMethod(false);
         });
-      })
-      .catch((err) => {
-        console.warn("[Setup Intent Verification]", err);
-      })
-      .finally(() => {
-        if (isMounted) setVerifyingSetup(false);
-      });
+    } else if (paymentId && planKey === "deposit") {
+      const qs = new URLSearchParams({ id: paymentId });
+      if (clientSecret) qs.set("client_secret", clientSecret);
+
+      fetch(`/api/payments?${qs.toString()}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!isMounted || !data) return;
+          setSavedMethodDetails({
+            status: data.status,
+            paymentMethodId: data.payment_method_id,
+            cardBrand: data.card?.brand,
+            cardLast4: data.card?.last4,
+          });
+        })
+        .catch((err) => {
+          console.warn("[Payment Verification]", err);
+        })
+        .finally(() => {
+          if (isMounted) setVerifyingSavedMethod(false);
+        });
+    } else {
+      setVerifyingSavedMethod(false);
+    }
 
     return () => {
       isMounted = false;
     };
-  }, [setupIntentId]);
+  }, [setupIntentId, paymentId, clientSecret, planKey]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -138,27 +162,36 @@ export default function CheckoutReturnPage() {
               </div>
             </div>
 
-            {/* Setup Intent / Stored Payment Method Notice: ONLY shown when setup_intent_id exists */}
-            {setupIntentId ? (
+            {/* Card-on-File Notice: shown for deposit or setup_intent_id */}
+            {setupIntentId || (planKey === "deposit" && paymentId) ? (
               <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2">
                 <div className="flex items-center gap-2 font-bold text-amber-950 text-sm">
                   <ShieldCheck className="w-5 h-5 text-amber-600" />
-                  <span>Card Saved on File via Setup Intent</span>
+                  <span>Payment Method Authorization (Card-on-File)</span>
                 </div>
-                {verifyingSetup ? (
+                {verifyingSavedMethod ? (
                   <div className="flex items-center gap-2 text-amber-800 text-xs">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Verifying stored payment method...</span>
+                    <span>Verifying stored payment method with Whop...</span>
                   </div>
-                ) : setupDetails?.paymentMethodId ? (
+                ) : savedMethodDetails?.paymentMethodId ? (
                   <p className="text-amber-800 leading-relaxed text-xs">
-                    Payment method <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">{setupDetails.paymentMethodId}</code>
-                    {setupDetails.cardLast4 ? ` (${setupDetails.cardBrand?.toUpperCase() ?? "Card"} •••• ${setupDetails.cardLast4})` : ""} has been securely authorized and stored for your final balance invoice upon project completion.
+                    Payment method{" "}
+                    <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">
+                      {savedMethodDetails.paymentMethodId}
+                    </code>
+                    {savedMethodDetails.cardLast4
+                      ? ` (${savedMethodDetails.cardBrand?.toUpperCase() ?? "Card"} •••• ${savedMethodDetails.cardLast4})`
+                      : ""}{" "}
+                    is authorized on file for final-balance invoicing once project work is completed.
                   </p>
                 ) : (
                   <p className="text-amber-800 leading-relaxed text-xs">
-                    Setup intent <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">{setupIntentId}</code> confirmed.
-                    Your payment method is authorized on file for final settlement once work is signed off.
+                    Deposit checkout completed (
+                    <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">
+                      {setupIntentId || paymentId}
+                    </code>
+                    ). Webhook synchronization finalizes the saved <code className="font-mono">payment_method_id</code> for your final-balance invoice.
                   </p>
                 )}
               </div>

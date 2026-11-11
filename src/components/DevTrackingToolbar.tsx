@@ -33,25 +33,6 @@ export const DevTrackingToolbar: React.FC = () => {
     };
   }, []);
 
-  // Also hook into window.whop if mock injected
-  useEffect(() => {
-    const originalTrack = window.whop?.track;
-    if (typeof window !== "undefined") {
-      window.whop = window.whop || {
-        track: (name: string, params?: Record<string, unknown>) => {
-          const newEvent: LoggedEvent = {
-            id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-            name,
-            params,
-            time: new Date().toLocaleTimeString(),
-          };
-          setEvents((prev) => [newEvent, ...prev.slice(0, 19)]);
-          if (originalTrack) originalTrack(name, params);
-        },
-      };
-    }
-  }, []);
-
   if (!isVisible) return null;
 
   return (

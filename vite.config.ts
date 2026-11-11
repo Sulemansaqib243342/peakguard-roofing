@@ -1,6 +1,6 @@
 import { whop } from '@whop/cli/vite'
 import { cloudflare } from "@cloudflare/vite-plugin";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
@@ -33,6 +33,8 @@ export default defineConfig(({ mode }) => {
   // Client-side SPA build.
   // outDir: "dist" so that the Cloudflare plugin emits static assets into
   // dist/client/ (its default sub-folder), matching Whop's expected layout.
+  const localEnv = loadEnv(mode, process.cwd(), "");
+
   return {
     plugins: [
       cloudflare({ viteEnvironment: { name: "ssr" }, assetsOnly: true }),
@@ -77,11 +79,15 @@ export default defineConfig(({ mode }) => {
               // Dynamically import worker and execute
               const { default: worker } = await server.ssrLoadModule("/src/server/worker.ts");
               const env = {
-                WHOP_API_ORIGIN: process.env.WHOP_API_ORIGIN || "https://sandbox-api.whop.com",
-                WHOP_ACCOUNT_ID: process.env.WHOP_ACCOUNT_ID || "biz_test_peakguard_roofing",
-                WHOP_API_KEY: process.env.WHOP_API_KEY,
-                ADMIN_SECRET: process.env.ADMIN_SECRET || "development-secret-change-me",
-                WHOP_WEBHOOK_SECRET: process.env.WHOP_WEBHOOK_SECRET || "ws_test_secret",
+                WHOP_API_ORIGIN: process.env.WHOP_API_ORIGIN || localEnv.WHOP_API_ORIGIN || "https://sandbox-api.whop.com",
+                WHOP_ACCOUNT_ID: process.env.WHOP_ACCOUNT_ID || localEnv.WHOP_ACCOUNT_ID || "",
+                WHOP_API_KEY: process.env.WHOP_API_KEY || localEnv.WHOP_API_KEY || "",
+                ADMIN_SECRET: process.env.ADMIN_SECRET || localEnv.ADMIN_SECRET || "",
+                WHOP_WEBHOOK_SECRET: process.env.WHOP_WEBHOOK_SECRET || localEnv.WHOP_WEBHOOK_SECRET || "",
+                WHOP_ENVIRONMENT: process.env.VITE_WHOP_ENVIRONMENT || localEnv.VITE_WHOP_ENVIRONMENT || "",
+                WHOP_PLAN_INSPECTION: process.env.VITE_WHOP_PLAN_INSPECTION || localEnv.VITE_WHOP_PLAN_INSPECTION || "",
+                WHOP_PLAN_DEPOSIT: process.env.VITE_WHOP_PLAN_DEPOSIT || localEnv.VITE_WHOP_PLAN_DEPOSIT || "",
+                WHOP_PLAN_TUNEUP: process.env.VITE_WHOP_PLAN_TUNEUP || localEnv.VITE_WHOP_PLAN_TUNEUP || "",
                 ASSETS: {
                   fetch: async () => new Response("Not found", { status: 404 }),
                 },

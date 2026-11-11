@@ -52,12 +52,31 @@ export interface SiteConfig {
     logoText: string;
     logoHighlight: string;
   };
-  // Whop account & plan configuration
+  // Whop account & plan configuration (swappable per environment in this single file)
   whop: {
     websiteRoute: string;
+    environment: "sandbox" | "production";
     // Your Whop Account ID (begins with biz_). Found in dashboard > Developer.
     accountId: string;
-    // Whop plans for direct checkout. Created via CLI or Dashboard.
+    environments: {
+      sandbox: {
+        accountId: string;
+        plans: {
+          inspection: string;
+          deposit: string;
+          tuneUp: string;
+        };
+      };
+      production: {
+        accountId: string;
+        plans: {
+          inspection: string;
+          deposit: string;
+          tuneUp: string;
+        };
+      };
+    };
+    // Whop plans for direct checkout. Created via Whop API / CLI / Dashboard.
     plans: {
       inspection: {
         id: string;             // plan_xxxxxxxxxxxxx
@@ -141,7 +160,7 @@ export const siteConfig: SiteConfig = {
       zip: "75201",
       formatted: "1420 Commercial Pkwy, Ste 200, Dallas, TX 75201",
     },
-    license: "TX-RCL #849201-A (Sample License)",
+    license: "Sample Contractor License Placeholder (Insert State License #)",
     insurance: "$2,000,000 Commercial General Liability (Sample Coverage Placeholder)",
     yearsInBusiness: 18,
     hours: "Monday – Saturday: 7:00 AM – 7:00 PM CST",
@@ -176,64 +195,102 @@ export const siteConfig: SiteConfig = {
   // ──────────────────────────────────────────────────────────────────────────
   // WHOP COMMERCE CONFIGURATION
   // ──────────────────────────────────────────────────────────────────────────
-  // Replace these placeholder plan IDs with real plan_ IDs after creating them
-  // via the Whop CLI or Dashboard. See README.md for instructions.
+  // Plan IDs and accountId are config-driven and swappable per environment
+  // ("sandbox" vs "production") or via VITE_WHOP_* env vars without editing components.
   // ──────────────────────────────────────────────────────────────────────────
-  whop: {
-    websiteRoute: "peakguard-roofing",
-    accountId: "", // Injected by Whop hosting runtime via env.WHOP_ACCOUNT_ID or configured in secrets
-    plans: {
-      // 1. Roof Inspection — one-time $149
-      inspection: {
-        id: "plan_roof_inspection_149",
-        name: "Comprehensive Roof Inspection",
-        price: 149,
-        priceDisplay: "$149",
-        billingType: "one_time",
-        description: "Full 21-point physical + aerial drone attic-to-eave inspection report delivered in 24 hours.",
-        features: [
-          "21-point structural & shingle health check",
-          "High-resolution 4K aerial drone photography",
-          "Attic decking, ventilation & moisture scan",
-          "Insurance-ready detailed assessment report",
-          "$149 credited back toward any repair or replacement over $1,000",
-        ],
+  whop: (() => {
+    const viteEnv =
+      (typeof import.meta !== "undefined"
+        ? ((import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {})
+        : {}) as Record<string, string | undefined>;
+    const rawEnv = viteEnv.VITE_WHOP_ENVIRONMENT;
+    const environment: "sandbox" | "production" =
+      rawEnv === "sandbox" || rawEnv === "production"
+        ? rawEnv
+        : viteEnv.DEV
+          ? "sandbox"
+          : "production";
+
+    const environments = {
+      sandbox: {
+        accountId: viteEnv.VITE_WHOP_SANDBOX_ACCOUNT_ID || "",
+        plans: {
+          inspection: viteEnv.VITE_WHOP_SANDBOX_PLAN_INSPECTION || "plan_SANDBOX_INSPECTION_149",
+          deposit: viteEnv.VITE_WHOP_SANDBOX_PLAN_DEPOSIT || "plan_SANDBOX_DEPOSIT_500",
+          tuneUp: viteEnv.VITE_WHOP_SANDBOX_PLAN_TUNEUP || "plan_SANDBOX_TUNEUP_299",
+        },
       },
-      // 2. Project Deposit — one-time $500 (Saves card on file for final balance invoicing)
-      deposit: {
-        id: "plan_project_deposit_500",
-        name: "Roof Project Reservation Deposit",
-        price: 500,
-        priceDisplay: "$500",
-        billingType: "one_time",
-        description: "Locks your installation date on our crew schedule and reserves materials. Card is securely saved on file for your final balance invoice upon project completion.",
-        features: [
-          "Locks guaranteed installation calendar date",
-          "Secures manufacturer material allotment",
-          "Deducted 100% from your final balance invoice",
-          "Card saved on file for seamless final balance invoice at completion",
-          "Fully refundable up to 72 hours before tear-off",
-        ],
-        savesCardOnFile: true,
+      production: {
+        accountId: viteEnv.VITE_WHOP_PROD_ACCOUNT_ID || "biz_U6yyBOj3Nsovqv",
+        plans: {
+          inspection: viteEnv.VITE_WHOP_PROD_PLAN_INSPECTION || "plan_PROD_INSPECTION_149",
+          deposit: viteEnv.VITE_WHOP_PROD_PLAN_DEPOSIT || "plan_PROD_DEPOSIT_500",
+          tuneUp: viteEnv.VITE_WHOP_PROD_PLAN_TUNEUP || "plan_PROD_TUNEUP_299",
+        },
       },
-      // 3. Flat-Rate Service — Roof Tune-Up & Storm Prep Flat Rate $299
-      tuneUp: {
-        id: "plan_roof_tuneup_299",
-        name: "Roof Tune-Up & Preventative Maintenance",
-        price: 299,
-        priceDisplay: "$299",
-        billingType: "one_time",
-        description: "Complete seasonal preventative maintenance: reseal penetrations, secure flashings, replace up to 5 shingles, and storm-readiness audit.",
-        features: [
-          "Reseal all pipe boots, vents, and roof penetrations",
-          "Flashing reseal and re-nailing at chimneys and headwalls",
-          "Replacement of up to 5 damaged shingles (materials included)",
-          "Minor gutter clear at valleys and downspout entries",
-          "Complete photo report before & after tune-up",
-        ],
+    };
+
+    const activeEnv = environments[environment];
+    const resolvedAccountId = viteEnv.VITE_WHOP_ACCOUNT_ID || activeEnv.accountId;
+
+    return {
+      websiteRoute: "peakguard-roofing",
+      environment,
+      accountId: resolvedAccountId,
+      environments,
+      plans: {
+        // 1. Roof Inspection — one-time $149
+        inspection: {
+          id: viteEnv.VITE_WHOP_PLAN_INSPECTION || activeEnv.plans.inspection,
+          name: "Comprehensive Roof Inspection",
+          price: 149,
+          priceDisplay: "$149",
+          billingType: "one_time" as const,
+          description: "Full 21-point physical + aerial drone attic-to-eave inspection report delivered in 24 hours.",
+          features: [
+            "21-point structural & shingle health check",
+            "High-resolution 4K aerial drone photography",
+            "Attic decking, ventilation & moisture scan",
+            "Insurance-ready detailed assessment report",
+            "$149 credited back toward any repair or replacement over $1,000",
+          ],
+        },
+        // 2. Project Deposit — one-time $500 (Saves card on file for final balance invoicing)
+        deposit: {
+          id: viteEnv.VITE_WHOP_PLAN_DEPOSIT || activeEnv.plans.deposit,
+          name: "Roof Project Reservation Deposit",
+          price: 500,
+          priceDisplay: "$500",
+          billingType: "one_time" as const,
+          description: "Locks your installation date on our crew schedule and reserves materials. Card is securely saved on file for your final balance invoice upon project completion.",
+          features: [
+            "Locks guaranteed installation calendar date",
+            "Secures manufacturer material allotment",
+            "Deducted 100% from your final balance invoice",
+            "Card saved on file for seamless final balance invoice at completion",
+            "Fully refundable up to 72 hours before tear-off",
+          ],
+          savesCardOnFile: true as const,
+        },
+        // 3. Flat-Rate Service — Roof Tune-Up & Storm Prep Flat Rate $299
+        tuneUp: {
+          id: viteEnv.VITE_WHOP_PLAN_TUNEUP || activeEnv.plans.tuneUp,
+          name: "Roof Tune-Up & Preventative Maintenance",
+          price: 299,
+          priceDisplay: "$299",
+          billingType: "one_time" as const,
+          description: "Complete seasonal preventative maintenance: reseal penetrations, secure flashings, replace up to 5 shingles, and storm-readiness audit.",
+          features: [
+            "Reseal all pipe boots, vents, and roof penetrations",
+            "Flashing reseal and re-nailing at chimneys and headwalls",
+            "Replacement of up to 5 damaged shingles (materials included)",
+            "Minor gutter clear at valleys and downspout entries",
+            "Complete photo report before & after tune-up",
+          ],
+        },
       },
-    },
-  },
+    };
+  })(),
 
   services: [
     {
@@ -256,14 +313,14 @@ export const siteConfig: SiteConfig = {
       id: "roof-replacement",
       title: "Full Roof Replacement & Restoration",
       shortDesc: "Complete tear-off and installation with 50-year architectural shingles and lifetime system warranties.",
-      fullDesc: "When a roof reaches its end of life or suffers widespread storm devastation, a full replacement is the only responsible choice. As a GAF and Owens Corning certified installer, we strip to the deck, inspect and re-deck where rotted, install synthetic underlayment, ice-and-water shields, and complete lifetime shingle systems.",
+      fullDesc: "When a roof reaches its end of life or suffers widespread storm devastation, a full replacement is the only responsible choice. Using certified installer processes, we strip to the deck, inspect and re-deck where rotted, install synthetic underlayment, ice-and-water shields, and complete architectural shingle systems.",
       icon: "Home",
       features: [
-        "Certified GAF Master Elite & Owens Corning Preferred Contractor",
+        "Manufacturer-grade architectural shingle systems (Sample tier)",
         "Complete tear-off with magnetic ground sweep for nail cleanup",
         "Continuous ridge ventilation and ice & water shield in valleys",
-        "Financing available at checkout for approved merchants",
-        "50-year non-prorated manufacturer warranty available",
+        "Financing options appear at checkout for approved merchants",
+        "Manufacturer-backed non-prorated warranty options",
       ],
       turnaround: "Most residential roofs completed in 1–2 days",
       warranty: "50-Year Non-Prorated System Warranty + 10-Year Workmanship Warranty",
@@ -390,7 +447,7 @@ export const siteConfig: SiteConfig = {
     },
     {
       question: "Are you licensed and insured?",
-      answer: "Yes. PeakGuard carries $2,000,000 in Commercial General Liability coverage, full Workers' Compensation insurance on every crew member, and holds Texas Roofing Contractor License #849201-A.",
+      answer: "Template sample notice: PeakGuard is a template demonstration listing $2,000,000 Commercial General Liability and Workers' Compensation coverage placeholders. Replace with verified contractor state license numbers and insurance certificates in src/site.config.ts prior to production launch.",
     },
   ],
 
