@@ -177,12 +177,35 @@ function resolveRuntimeConfig(env: Env) {
       : envFromOrigin;
 
   const envConfig = siteConfig.whop.environments[environment];
-  const accountId = env.WHOP_ACCOUNT_ID || envConfig.accountId || siteConfig.whop.accountId || "";
+  const isSandbox = environment === "sandbox";
+  const accountId =
+    env.WHOP_ACCOUNT_ID ||
+    String(
+      (isSandbox ? env.VITE_WHOP_SANDBOX_ACCOUNT_ID : env.VITE_WHOP_PROD_ACCOUNT_ID) ||
+        envConfig.accountId ||
+        siteConfig.whop.accountId ||
+        ""
+    );
 
   const plans = {
-    inspection: env.WHOP_PLAN_INSPECTION || envConfig.plans.inspection || siteConfig.whop.plans.inspection.id,
-    deposit: env.WHOP_PLAN_DEPOSIT || envConfig.plans.deposit || siteConfig.whop.plans.deposit.id,
-    tuneUp: env.WHOP_PLAN_TUNEUP || envConfig.plans.tuneUp || siteConfig.whop.plans.tuneUp.id,
+    inspection: String(
+      env.WHOP_PLAN_INSPECTION ||
+        (isSandbox ? env.VITE_WHOP_SANDBOX_PLAN_INSPECTION : env.VITE_WHOP_PROD_PLAN_INSPECTION) ||
+        envConfig.plans.inspection ||
+        siteConfig.whop.plans.inspection.id
+    ),
+    deposit: String(
+      env.WHOP_PLAN_DEPOSIT ||
+        (isSandbox ? env.VITE_WHOP_SANDBOX_PLAN_DEPOSIT : env.VITE_WHOP_PROD_PLAN_DEPOSIT) ||
+        envConfig.plans.deposit ||
+        siteConfig.whop.plans.deposit.id
+    ),
+    tuneUp: String(
+      env.WHOP_PLAN_TUNEUP ||
+        (isSandbox ? env.VITE_WHOP_SANDBOX_PLAN_TUNEUP : env.VITE_WHOP_PROD_PLAN_TUNEUP) ||
+        envConfig.plans.tuneUp ||
+        siteConfig.whop.plans.tuneUp.id
+    ),
   };
 
   return {

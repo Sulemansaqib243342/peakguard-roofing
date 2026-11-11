@@ -78,16 +78,46 @@ export default defineConfig(({ mode }) => {
 
               // Dynamically import worker and execute
               const { default: worker } = await server.ssrLoadModule("/src/server/worker.ts");
+              const resolvedApiOrigin =
+                process.env.WHOP_API_ORIGIN || localEnv.WHOP_API_ORIGIN || "https://sandbox-api.whop.com";
+              const resolvedWhopEnv =
+                process.env.VITE_WHOP_ENVIRONMENT ||
+                localEnv.VITE_WHOP_ENVIRONMENT ||
+                (resolvedApiOrigin.includes("sandbox") ? "sandbox" : "production");
+              const isSandbox = resolvedWhopEnv === "sandbox";
+
               const env = {
-                WHOP_API_ORIGIN: process.env.WHOP_API_ORIGIN || localEnv.WHOP_API_ORIGIN || "https://sandbox-api.whop.com",
-                WHOP_ACCOUNT_ID: process.env.WHOP_ACCOUNT_ID || localEnv.WHOP_ACCOUNT_ID || "",
+                WHOP_API_ORIGIN: resolvedApiOrigin,
+                WHOP_ACCOUNT_ID:
+                  process.env.WHOP_ACCOUNT_ID ||
+                  localEnv.WHOP_ACCOUNT_ID ||
+                  (isSandbox ? localEnv.VITE_WHOP_SANDBOX_ACCOUNT_ID : localEnv.VITE_WHOP_PROD_ACCOUNT_ID) ||
+                  "",
                 WHOP_API_KEY: process.env.WHOP_API_KEY || localEnv.WHOP_API_KEY || "",
                 ADMIN_SECRET: process.env.ADMIN_SECRET || localEnv.ADMIN_SECRET || "",
                 WHOP_WEBHOOK_SECRET: process.env.WHOP_WEBHOOK_SECRET || localEnv.WHOP_WEBHOOK_SECRET || "",
-                WHOP_ENVIRONMENT: process.env.VITE_WHOP_ENVIRONMENT || localEnv.VITE_WHOP_ENVIRONMENT || "",
-                WHOP_PLAN_INSPECTION: process.env.VITE_WHOP_PLAN_INSPECTION || localEnv.VITE_WHOP_PLAN_INSPECTION || "",
-                WHOP_PLAN_DEPOSIT: process.env.VITE_WHOP_PLAN_DEPOSIT || localEnv.VITE_WHOP_PLAN_DEPOSIT || "",
-                WHOP_PLAN_TUNEUP: process.env.VITE_WHOP_PLAN_TUNEUP || localEnv.VITE_WHOP_PLAN_TUNEUP || "",
+                WHOP_ENVIRONMENT: resolvedWhopEnv,
+                WHOP_PLAN_INSPECTION:
+                  process.env.WHOP_PLAN_INSPECTION ||
+                  localEnv.WHOP_PLAN_INSPECTION ||
+                  process.env.VITE_WHOP_PLAN_INSPECTION ||
+                  localEnv.VITE_WHOP_PLAN_INSPECTION ||
+                  (isSandbox ? localEnv.VITE_WHOP_SANDBOX_PLAN_INSPECTION : localEnv.VITE_WHOP_PROD_PLAN_INSPECTION) ||
+                  "",
+                WHOP_PLAN_DEPOSIT:
+                  process.env.WHOP_PLAN_DEPOSIT ||
+                  localEnv.WHOP_PLAN_DEPOSIT ||
+                  process.env.VITE_WHOP_PLAN_DEPOSIT ||
+                  localEnv.VITE_WHOP_PLAN_DEPOSIT ||
+                  (isSandbox ? localEnv.VITE_WHOP_SANDBOX_PLAN_DEPOSIT : localEnv.VITE_WHOP_PROD_PLAN_DEPOSIT) ||
+                  "",
+                WHOP_PLAN_TUNEUP:
+                  process.env.WHOP_PLAN_TUNEUP ||
+                  localEnv.WHOP_PLAN_TUNEUP ||
+                  process.env.VITE_WHOP_PLAN_TUNEUP ||
+                  localEnv.VITE_WHOP_PLAN_TUNEUP ||
+                  (isSandbox ? localEnv.VITE_WHOP_SANDBOX_PLAN_TUNEUP : localEnv.VITE_WHOP_PROD_PLAN_TUNEUP) ||
+                  "",
                 ASSETS: {
                   fetch: async () => new Response("Not found", { status: 404 }),
                 },
