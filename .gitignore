@@ -40,3 +40,6 @@ demo-videos/
 # Debug/test scripts
 scripts/test-*.cjs
 
+# Cloudflare Wrangler local state
+.wrangler/
+

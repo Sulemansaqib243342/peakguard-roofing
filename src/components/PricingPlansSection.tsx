@@ -96,12 +96,12 @@ export const PricingPlansSection: React.FC<PricingPlansSectionProps> = ({ onOpen
             </div>
           </div>
 
-          {/* Card 2: Project Deposit ($500) — Calm Dark Navy Card */}
-          <div className="rounded-2xl bg-slate-900 text-white p-7 flex flex-col justify-between shadow-lg border border-slate-800 relative">
+          {/* Card 2: Project Deposit ($500) — Highlighted Center Card */}
+          <div className="rounded-2xl bg-slate-900 text-white p-7 sm:p-8 flex flex-col justify-between shadow-2xl border-2 border-amber-500 relative lg:-translate-y-1">
             <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">
-                  Project Reservation
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  Most Popular • Deposit
                 </span>
                 <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-amber-400/30 flex items-center gap-1">
                   <Lock className="w-3 h-3" />

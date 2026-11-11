@@ -2,7 +2,35 @@ import { whop } from '@whop/cli/vite'
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { build as esbuild } from "esbuild";
+import fs from "node:fs";
 import path from "node:path";
+
+let cachedWorkerMtime = 0;
+let cachedWorkerMod: { default: { fetch: (req: Request, env: unknown) => Promise<Response> } } | null = null;
+
+async function loadDevWorker() {
+  const workerPath = path.resolve(__dirname, "src/server/worker.ts");
+  const configPath = path.resolve(__dirname, "src/site.config.ts");
+  const mtime = Math.max(fs.statSync(workerPath).mtimeMs, fs.statSync(configPath).mtimeMs);
+  if (cachedWorkerMod && mtime === cachedWorkerMtime) {
+    return cachedWorkerMod.default;
+  }
+
+  const built = await esbuild({
+    entryPoints: [workerPath],
+    bundle: true,
+    write: false,
+    format: "esm",
+    platform: "node",
+    target: "node20",
+  });
+  const code = built.outputFiles[0].text;
+  const dataUrl = `data:text/javascript;base64,${Buffer.from(code, "utf8").toString("base64")}`;
+  cachedWorkerMod = await import(/* @vite-ignore */ dataUrl);
+  cachedWorkerMtime = mtime;
+  return cachedWorkerMod!.default;
+}
 
 // In local dev, we also provide a dev server middleware to handle /api/* routes
 // so that estimate submission, invoice creation, and diagnostics work seamlessly
@@ -76,47 +104,47 @@ export default defineConfig(({ mode }) => {
                 body: body || undefined,
               });
 
-              // Dynamically import worker and execute
-              const { default: worker } = await server.ssrLoadModule("/src/server/worker.ts");
+              // Dynamically compile and execute worker without colliding with Cloudflare SSR environment
+              const worker = await loadDevWorker();
               const resolvedApiOrigin =
-                process.env.WHOP_API_ORIGIN || localEnv.WHOP_API_ORIGIN || "https://sandbox-api.whop.com";
+                localEnv.WHOP_API_ORIGIN || process.env.WHOP_API_ORIGIN || "https://sandbox-api.whop.com";
               const resolvedWhopEnv =
-                process.env.VITE_WHOP_ENVIRONMENT ||
                 localEnv.VITE_WHOP_ENVIRONMENT ||
+                process.env.VITE_WHOP_ENVIRONMENT ||
                 (resolvedApiOrigin.includes("sandbox") ? "sandbox" : "production");
               const isSandbox = resolvedWhopEnv === "sandbox";
 
               const env = {
                 WHOP_API_ORIGIN: resolvedApiOrigin,
                 WHOP_ACCOUNT_ID:
-                  process.env.WHOP_ACCOUNT_ID ||
                   localEnv.WHOP_ACCOUNT_ID ||
                   (isSandbox ? localEnv.VITE_WHOP_SANDBOX_ACCOUNT_ID : localEnv.VITE_WHOP_PROD_ACCOUNT_ID) ||
+                  process.env.WHOP_ACCOUNT_ID ||
                   "",
-                WHOP_API_KEY: process.env.WHOP_API_KEY || localEnv.WHOP_API_KEY || "",
-                ADMIN_SECRET: process.env.ADMIN_SECRET || localEnv.ADMIN_SECRET || "",
-                WHOP_WEBHOOK_SECRET: process.env.WHOP_WEBHOOK_SECRET || localEnv.WHOP_WEBHOOK_SECRET || "",
+                WHOP_API_KEY: localEnv.WHOP_API_KEY || process.env.WHOP_API_KEY || "",
+                ADMIN_SECRET: localEnv.ADMIN_SECRET || process.env.ADMIN_SECRET || "",
+                WHOP_WEBHOOK_SECRET: localEnv.WHOP_WEBHOOK_SECRET || process.env.WHOP_WEBHOOK_SECRET || "",
                 WHOP_ENVIRONMENT: resolvedWhopEnv,
                 WHOP_PLAN_INSPECTION:
-                  process.env.WHOP_PLAN_INSPECTION ||
                   localEnv.WHOP_PLAN_INSPECTION ||
-                  process.env.VITE_WHOP_PLAN_INSPECTION ||
                   localEnv.VITE_WHOP_PLAN_INSPECTION ||
                   (isSandbox ? localEnv.VITE_WHOP_SANDBOX_PLAN_INSPECTION : localEnv.VITE_WHOP_PROD_PLAN_INSPECTION) ||
+                  process.env.WHOP_PLAN_INSPECTION ||
+                  process.env.VITE_WHOP_PLAN_INSPECTION ||
                   "",
                 WHOP_PLAN_DEPOSIT:
-                  process.env.WHOP_PLAN_DEPOSIT ||
                   localEnv.WHOP_PLAN_DEPOSIT ||
-                  process.env.VITE_WHOP_PLAN_DEPOSIT ||
                   localEnv.VITE_WHOP_PLAN_DEPOSIT ||
                   (isSandbox ? localEnv.VITE_WHOP_SANDBOX_PLAN_DEPOSIT : localEnv.VITE_WHOP_PROD_PLAN_DEPOSIT) ||
+                  process.env.WHOP_PLAN_DEPOSIT ||
+                  process.env.VITE_WHOP_PLAN_DEPOSIT ||
                   "",
                 WHOP_PLAN_TUNEUP:
-                  process.env.WHOP_PLAN_TUNEUP ||
                   localEnv.WHOP_PLAN_TUNEUP ||
-                  process.env.VITE_WHOP_PLAN_TUNEUP ||
                   localEnv.VITE_WHOP_PLAN_TUNEUP ||
                   (isSandbox ? localEnv.VITE_WHOP_SANDBOX_PLAN_TUNEUP : localEnv.VITE_WHOP_PROD_PLAN_TUNEUP) ||
+                  process.env.WHOP_PLAN_TUNEUP ||
+                  process.env.VITE_WHOP_PLAN_TUNEUP ||
                   "",
                 ASSETS: {
                   fetch: async () => new Response("Not found", { status: 404 }),

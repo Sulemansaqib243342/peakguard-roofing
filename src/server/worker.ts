@@ -1121,7 +1121,16 @@ export default {
     }
 
     if (env.ASSETS && typeof env.ASSETS.fetch === "function") {
-      return env.ASSETS.fetch(request);
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (
+        assetResponse.status === 404 &&
+        (request.method === "GET" || request.method === "HEAD") &&
+        !url.pathname.startsWith("/api/")
+      ) {
+        const indexRequest = new Request(new URL("/index.html", url.origin).toString(), request);
+        return env.ASSETS.fetch(indexRequest);
+      }
+      return assetResponse;
     }
 
     return new Response("Not found", { status: 404 });
