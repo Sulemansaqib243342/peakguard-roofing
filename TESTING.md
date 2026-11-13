@@ -53,15 +53,23 @@ Every check below reflects **strictly observed** results from this repository bu
 - [x] `deposit_started`: Fires once per deposit CTA click (`value: 500`, `currency: "USD"`, `setup_future_usage: "off_session"`).
 - [x] `estimate_requested`: Verified firing once on confirmed `POST /api/estimate` `200` (`?debug=1` captured `lead` + `estimate_requested`).
 
-### 5. Production Setup & Live `whop.app` / `whop.site` Deployment (`biz_U6yyBOj3Nsovqv`)
+### 5. Production Setup & Live `whop.site` Deployment (`biz_U6yyBOj3Nsovqv`)
 - [x] **3 One-Time Production Plans created & retrieved (`whop variants get`):**
   - `$149` Inspection: `prod_GZrvHR6oI6axq` / `plan_w5qRLZ3xdHyO5`
   - `$500` Project Deposit: `prod_ihwCgXdbOcBC1` / `plan_LGqPPEBKD3a9C`
   - `$299` Roof Tune-Up: `prod_GFkKOXFLJfpXU` / `plan_X2YKQiiIRfqFd`
-- [x] **Deployed & Promoted (`npx whop apps deploy`):** Build `apbu_dC9L2MKJeZp0K` (`status: approved`, `is_production: true`) live at **`https://peakguard-roofing.whop.site`**.
-- [x] **Live Production Smoke Checks (Non-destructive, zero real charges):**
-  - `GET /api/health` → HTTP `200` (`runtime: "whop-hosting"`).
-  - `GET /api/public-config` → HTTP `200` (`environment: "production"`, `accountId: "biz_U6yyBOj3Nsovqv"`, returning all 3 live `plan_` IDs).
-  - Direct SPA navigation (`/`, `/checkout/return?key=deposit&status=canceled`, `/admin/invoicing`) → HTTP `200`.
-  - Headless Chrome render (`1280x800`): `scrollWidth === 1280`, `window.whop.track` present (`true`), `$500` modal opens (`SECURE WHOP PAYMENTS (LIVE)`, `elementCount=4`), zero `pageErrors`.
-- [ ] **NOT VERIFIED (Live Production Payment / Invoice Issue / Webhook Delivery):** Requires setting real secrets via `whop apps secrets set --app app_cwcaMIErHBTI4d` (`WHOP_API_KEY`, `ADMIN_SECRET`, `WHOP_WEBHOOK_SECRET`), registering `https://peakguard-roofing.whop.site/api/webhooks/whop`, and completing Whop Production merchant verification for invoices.
+- [x] **Deployed & Promoted (`npx whop apps deploy`):** Build `apbu_AFhm2ZaApn5rA` (`status: approved`, `is_production: true`) live at **`https://peakguard-roofing.whop.site`**.
+- [x] **Live Production Secrets Configured via `whop apps secrets set`:**
+  - `ADMIN_SECRET`: Set to `Xk9-pQ2m.`, verified with `POST /api/admin/verify` → `200 {"authenticated":true}`.
+  - `WHOP_WEBHOOK_SECRET`: Set to `ws_fc365e4aef4a9701c9fdfb6d7987ac2351399183dbe0fa50a52c65e3f2cd9225`.
+- [x] **Live Production Webhook Verification (`POST /api/webhooks/whop`):**
+  - Endpoint registered in Whop Developer Dashboard: `https://peakguard-roofing.whop.site/api/webhooks/whop`.
+  - Valid HMAC-SHA256 signature (`payment.succeeded`, `$149.00 USD`) → **HTTP `200` `{"received":true}`**, appears live in `/admin/events`.
+  - Replay / Tolerance guard: Expired timestamp (>300s) rejected with **HTTP `401` `{"error":"Webhook timestamp expired or out of tolerance"}`**.
+  - Signature integrity guard: Forged signature rejected with **HTTP `401` `{"error":"Invalid webhook signature"}`**.
+- [x] **Live Production Admin Views Matching Reference Video:**
+  - `/admin/invoicing`: Final balance invoicing with customer & card-on-file lookup, auto-charge guard, and manual balance modes.
+  - `/admin/leads`: Real-time dashboard pulling submissions from Whop Leads & Events API with search, service filters, and "Invoice Customer" action.
+  - `/admin/events`: Real-time pixel & webhook telemetry table with live stats, event filters, and "Fire Test Event" action.
+  - Direct SPA navigation across all admin routes (`/admin`, `/admin/invoicing`, `/admin/leads`, `/admin/events`) → HTTP `200`.
+- [ ] **NOT VERIFIED (Live Invoice Issue / Auto-Charge on Production):** Blocked by Whop until merchant KYC is completed on account `biz_U6yyBOj3Nsovqv`. Attempting to issue/send live invoices returns HTTP `400` with code `invoice_account_verification_required`. Completing merchant onboarding in Whop dashboard unblocks live invoicing.
