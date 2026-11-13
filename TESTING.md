@@ -60,8 +60,8 @@ Every check below reflects **strictly observed** results from this repository bu
   - `$299` Roof Tune-Up: `prod_GFkKOXFLJfpXU` / `plan_X2YKQiiIRfqFd`
 - [x] **Deployed & Promoted (`npx whop apps deploy`):** Build `apbu_AFhm2ZaApn5rA` (`status: approved`, `is_production: true`) live at **`https://peakguard-roofing.whop.site`**.
 - [x] **Live Production Secrets Configured via `whop apps secrets set`:**
-  - `ADMIN_SECRET`: Set to `Xk9-pQ2m.`, verified with `POST /api/admin/verify` → `200 {"authenticated":true}`.
-  - `WHOP_WEBHOOK_SECRET`: Set to `ws_fc365e4aef4a9701c9fdfb6d7987ac2351399183dbe0fa50a52c65e3f2cd9225`.
+  - `ADMIN_SECRET`: Configured securely, verified with `POST /api/admin/verify` → `200 {"authenticated":true}`.
+  - `WHOP_WEBHOOK_SECRET`: Configured securely (`ws_...`).
 - [x] **Live Production Webhook Verification (`POST /api/webhooks/whop`):**
   - Endpoint registered in Whop Developer Dashboard: `https://peakguard-roofing.whop.site/api/webhooks/whop`.
   - Valid HMAC-SHA256 signature (`payment.succeeded`, `$149.00 USD`) → **HTTP `200` `{"received":true}`**, appears live in `/admin/events`.

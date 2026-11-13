@@ -162,10 +162,14 @@ function checkRateLimit(ip: string, limit = 5, windowMs = 60000): boolean {
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  const aLen = a.length;
+  const bLen = b.length;
+  let result = aLen ^ bLen;
+  const maxLen = Math.max(aLen, bLen);
+  for (let i = 0; i < maxLen; i++) {
+    const charA = i < aLen ? a.charCodeAt(i) : 0;
+    const charB = i < bLen ? b.charCodeAt(i) : 0;
+    result |= charA ^ charB;
   }
   return result === 0;
 }
@@ -836,6 +840,14 @@ async function handleLeadSubmission(request: Request, env: Env): Promise<Respons
 // ────────────────────────────────────────────────────────────────────────────
 
 async function handleAdminVerify(request: Request, env: Env): Promise<Response> {
+  const clientIp = request.headers.get("cf-connecting-ip") || "127.0.0.1";
+  if (!checkRateLimit(`admin-verify:${clientIp}`, 10, 60000)) {
+    return jsonResponse(
+      { error: "Too many authentication attempts. Please wait a minute." },
+      429,
+      request
+    );
+  }
   const authError = requireAdminAuth(request, env);
   if (authError) return authError;
   return jsonResponse({ authenticated: true }, 200, request);
@@ -977,6 +989,10 @@ async function handleAdminEvents(request: Request, env: Env): Promise<Response> 
 }
 
 async function handleClientTrackEvent(request: Request): Promise<Response> {
+  const clientIp = request.headers.get("cf-connecting-ip") || "127.0.0.1";
+  if (!checkRateLimit(`track:${clientIp}`, 60, 60000)) {
+    return jsonResponse({ ok: false, error: "Rate limit exceeded" }, 429, request);
+  }
   try {
     const body = (await request.json()) as {
       name?: string;
