@@ -1,19 +1,18 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
-  Lock,
   Receipt,
   CreditCard,
   Send,
   CheckCircle2,
   AlertCircle,
   Loader2,
-  ArrowLeft,
   ShieldAlert,
   Search,
   UserCheck,
   ExternalLink,
 } from "lucide-react";
+import { AdminNavTabs } from "../components/AdminNavTabs";
 
 interface MatchedPaymentMethod {
   id: string;
@@ -35,7 +34,10 @@ interface CustomerLookupResult {
 }
 
 export default function AdminInvoicePage() {
-  const [adminSecret, setAdminSecret] = useState("");
+  const [searchParams] = useSearchParams();
+  const [adminSecret, setAdminSecret] = useState(() => {
+    return sessionStorage.getItem("peakguard_admin_secret") || "";
+  });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecking, setAuthChecking] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -64,31 +66,59 @@ export default function AdminInvoicePage() {
   const balanceDue = Math.max(0, Number((originalEstimate - depositPaid).toFixed(2)));
   const selectedMethod = lookupResult?.paymentMethods.find((m) => m.id === paymentMethodId) || null;
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminSecret.trim()) return;
+  // On mount: check URL params and check sessionStorage
+  useEffect(() => {
+    const qEmail = searchParams.get("email");
+    const qName = searchParams.get("name");
+    if (qEmail) setRecipientEmail(qEmail);
+    if (qName) setCustomerName(qName);
 
+    if (adminSecret) {
+      verifySecret(adminSecret, qEmail || undefined);
+    }
+  }, []);
+
+  const verifySecret = async (secret: string, autoLookupEmail?: string) => {
     setAuthChecking(true);
     setAuthError(null);
     try {
       const res = await fetch("/api/admin/verify", {
         method: "POST",
-        headers: { "x-admin-secret": adminSecret },
+        headers: { "x-admin-secret": secret },
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || "Invalid ADMIN_SECRET.");
       }
       setIsAuthenticated(true);
+      sessionStorage.setItem("peakguard_admin_secret", secret);
+      if (autoLookupEmail) {
+        performCustomerLookup(autoLookupEmail, secret);
+      }
     } catch (err: any) {
+      setIsAuthenticated(false);
       setAuthError(err.message || "Authentication failed.");
     } finally {
       setAuthChecking(false);
     }
   };
 
-  const handleLookupCustomer = async () => {
-    if (!recipientEmail.trim() || !recipientEmail.includes("@")) {
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminSecret.trim()) return;
+    verifySecret(adminSecret.trim(), recipientEmail || undefined);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("peakguard_admin_secret");
+    setIsAuthenticated(false);
+    setAdminSecret("");
+    setLookupResult(null);
+    setResult(null);
+  };
+
+  const performCustomerLookup = async (email: string, secret = adminSecret) => {
+    if (!email.trim() || !email.includes("@")) {
       setLookupError("Enter a valid customer email first.");
       return;
     }
@@ -100,9 +130,9 @@ export default function AdminInvoicePage() {
 
     try {
       const res = await fetch(
-        `/api/admin/customer-lookup?email=${encodeURIComponent(recipientEmail.trim())}`,
+        `/api/admin/customer-lookup?email=${encodeURIComponent(email.trim())}`,
         {
-          headers: { "x-admin-secret": adminSecret },
+          headers: { "x-admin-secret": secret },
         }
       );
       const data = (await res.json()) as CustomerLookupResult & { error?: string };
@@ -130,6 +160,10 @@ export default function AdminInvoicePage() {
     } finally {
       setLookingUp(false);
     }
+  };
+
+  const handleLookupCustomer = async () => {
+    performCustomerLookup(recipientEmail);
   };
 
   const handleCreateInvoice = async (e: React.FormEvent) => {
@@ -177,29 +211,10 @@ export default function AdminInvoicePage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans flex flex-col">
-      {/* Top Header */}
-      <header className="border-b border-slate-800 bg-slate-950 px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              to="/"
-              aria-label="Back to home"
-              className="text-slate-400 hover:text-white transition-colors focus-visible:ring-2 focus-visible:ring-amber-400 rounded"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Lock className="w-4 h-4 text-amber-400" />
-              <span className="font-bold text-white text-sm">
-                PeakGuard Admin • Final Balance Invoicing
-              </span>
-            </div>
-          </div>
-          <span className="text-xs bg-amber-400/10 text-amber-400 border border-amber-400/30 px-2.5 py-0.5 rounded-full font-mono">
-            Whop Invoices API v1
-          </span>
-        </div>
-      </header>
+      {/* Admin Nav Tabs */}
+      {isAuthenticated && (
+        <AdminNavTabs adminSecret={adminSecret} onLogout={handleLogout} />
+      )}
 
       {/* Main Area */}
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-10">

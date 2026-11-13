@@ -100,11 +100,25 @@ export function trackEvent(name: TrackingEventName | string, params?: TrackingPa
     } catch (err) {
       console.warn(`[Whop Track] Error emitting event "${name}":`, err);
     }
-  } else {
-    // In local development outside Whop hosting, the pixel isn't auto-injected.
-    // We log that it would have fired so developers can verify instrumentation.
-    if (import.meta.env.DEV) {
-      // Pixel not present locally (normal in Vite dev server outside `whop apps dev`)
+  }
+
+  // Also sync to server-side event buffer for live /admin/events feed
+  if (typeof window !== "undefined") {
+    try {
+      fetch("/api/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          page: window.location.pathname || "/",
+          value: params?.value ? `$${params.value} ${params?.currency || "USD"}` : undefined,
+          params,
+          timestamp: Date.now(),
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {
+      // Ignore background telemetry errors
     }
   }
 }

@@ -92,6 +92,51 @@ const processedWebhookIds = new Map<string, number>();
 const webhookCacheByPaymentId = new Map<string, WebhookPaymentCacheEntry>();
 const webhookCacheByEmail = new Map<string, WebhookPaymentCacheEntry>();
 
+export interface RecordedLead {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address?: string;
+  zipCode?: string;
+  serviceType: string;
+  notes?: string;
+  whopLeadId?: string;
+  whopEventId?: string;
+  createdAt: number;
+}
+
+export interface RecordedTrackingEvent {
+  id: string;
+  name: string;
+  page: string;
+  value?: string | number;
+  params?: Record<string, unknown>;
+  timestamp: number;
+}
+
+const recordedLeads: RecordedLead[] = [];
+const recordedEvents: RecordedTrackingEvent[] = [
+  {
+    id: `evt_init_${Date.now()}`,
+    name: "pixel.page",
+    page: "/",
+    value: undefined,
+    params: { note: "Whop runtime tracking initialized" },
+    timestamp: Date.now(),
+  },
+];
+
+function recordLead(lead: RecordedLead) {
+  recordedLeads.unshift(lead);
+  if (recordedLeads.length > 100) recordedLeads.pop();
+}
+
+function recordTrackingEvent(evt: RecordedTrackingEvent) {
+  recordedEvents.unshift(evt);
+  if (recordedEvents.length > 200) recordedEvents.pop();
+}
+
 function pruneBoundedMap<V>(map: Map<string, V>, maxEntries = 500) {
   if (map.size <= maxEntries) return;
   const oldestKey = map.keys().next().value;
@@ -739,6 +784,29 @@ async function handleLeadSubmission(request: Request, env: Env): Promise<Respons
       `[Lead Recorded] eventId=${parsedEvent?.id || "none"} leadId=${whopLeadId || "anonymous"} ref=${leadRefId} service=${serviceType}`
     );
 
+    recordLead({
+      id: leadRefId,
+      name,
+      email,
+      phone: formattedPhone,
+      address,
+      zipCode: zip,
+      serviceType,
+      notes: message,
+      whopLeadId,
+      whopEventId: parsedEvent?.id,
+      createdAt: Date.now(),
+    });
+
+    recordTrackingEvent({
+      id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      name: "estimate_requested",
+      page: "/",
+      value: serviceType,
+      params: { email, serviceType, zipCode: zip, whopLeadId, whopEventId: parsedEvent?.id },
+      timestamp: Date.now(),
+    });
+
     return jsonResponse(
       {
         success: true,
@@ -855,6 +923,81 @@ async function handleAdminCustomerLookup(request: Request, env: Env): Promise<Re
     );
   } catch (err: any) {
     return jsonResponse({ error: err.message || "Customer lookup error" }, 502, request);
+  }
+}
+
+async function handleAdminLeads(request: Request, env: Env): Promise<Response> {
+  const authError = requireAdminAuth(request, env);
+  if (authError) return authError;
+
+  const cfg = resolveRuntimeConfig(env);
+  let whopLeads: any[] = [];
+
+  if (cfg.accountId && cfg.hasAuth) {
+    try {
+      const res = await whopFetch(
+        cfg.apiOrigin,
+        cfg.apiKey,
+        `/leads?account_id=${encodeURIComponent(cfg.accountId)}`
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { data?: any[] };
+        whopLeads = data.data || [];
+      }
+    } catch (e) {
+      console.warn("[Admin Leads] Failed fetching from Whop Leads API:", e);
+    }
+  }
+
+  return jsonResponse(
+    {
+      success: true,
+      localLeads: recordedLeads,
+      whopLeads,
+      totalCount: recordedLeads.length + whopLeads.length,
+    },
+    200,
+    request
+  );
+}
+
+async function handleAdminEvents(request: Request, env: Env): Promise<Response> {
+  const authError = requireAdminAuth(request, env);
+  if (authError) return authError;
+
+  return jsonResponse(
+    {
+      success: true,
+      events: recordedEvents,
+      totalCount: recordedEvents.length,
+    },
+    200,
+    request
+  );
+}
+
+async function handleClientTrackEvent(request: Request): Promise<Response> {
+  try {
+    const body = (await request.json()) as {
+      name?: string;
+      page?: string;
+      value?: string | number;
+      params?: Record<string, unknown>;
+      timestamp?: number;
+    };
+    if (body.name) {
+      recordTrackingEvent({
+        id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        name: body.name,
+        page: body.page || "/",
+        value: body.value,
+        params: body.params,
+        timestamp: body.timestamp || Date.now(),
+      });
+    }
+    return jsonResponse({ ok: true }, 200, request);
+  } catch {
+    return jsonResponse({ ok: false }, 400, request);
   }
 }
 
@@ -1164,6 +1307,15 @@ async function handleWhopWebhook(request: Request, env: Env): Promise<Response> 
       webhookCacheByEmail.set(emailKey, entry);
       pruneBoundedMap(webhookCacheByEmail, 500);
     }
+
+    recordTrackingEvent({
+      id: `evt_wh_${webhookId || Date.now()}`,
+      name: event.type,
+      page: "/api/webhooks/whop",
+      value: data.amount ? `$${(data.amount / 100).toFixed(2)} USD` : undefined,
+      params: { paymentId: data.id, customer: data.customer_email, status: data.status },
+      timestamp: Date.now(),
+    });
   }
 
   return jsonResponse({ received: true }, 200, request);
@@ -1218,6 +1370,18 @@ export default {
 
     if (url.pathname === "/api/webhooks/whop" && request.method === "POST") {
       return handleWhopWebhook(request, env);
+    }
+
+    if (url.pathname === "/api/track" && request.method === "POST") {
+      return handleClientTrackEvent(request);
+    }
+
+    if (url.pathname === "/api/admin/leads" && request.method === "GET") {
+      return handleAdminLeads(request, env);
+    }
+
+    if (url.pathname === "/api/admin/events" && request.method === "GET") {
+      return handleAdminEvents(request, env);
     }
 
     if (url.pathname === "/api/health") {

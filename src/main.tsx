@@ -1,9 +1,11 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import App from "./App";
 import CheckoutReturnPage from "./pages/CheckoutReturnPage";
 import AdminInvoicePage from "./pages/AdminInvoicePage";
+import AdminLeadsPage from "./pages/AdminLeadsPage";
+import AdminEventsPage from "./pages/AdminEventsPage";
 import { siteConfig } from "./site.config";
 import "./index.css";
 
@@ -25,7 +27,10 @@ function Root() {
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/checkout/return" element={<CheckoutReturnPage />} />
+        <Route path="/admin" element={<Navigate to="/admin/invoicing" replace />} />
         <Route path="/admin/invoicing" element={<AdminInvoicePage />} />
+        <Route path="/admin/leads" element={<AdminLeadsPage />} />
+        <Route path="/admin/events" element={<AdminEventsPage />} />
       </Routes>
     </BrowserRouter>
   );
